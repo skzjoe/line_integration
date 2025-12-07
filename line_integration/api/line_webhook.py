@@ -13,8 +13,9 @@ from line_integration.utils.line_client import (
     reply_message,
 )
 
-REGISTER_PROMPT = "Please tell us your name to get started."
-ASK_PHONE_PROMPT = "Thanks! Now please send your 10-digit phone number."
+REGISTER_PROMPT = "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งชื่อที่ต้องการใช้งานมาให้เราค่ะ"
+ASK_PHONE_PROMPT = "ขอบคุณค่า! ตอนนี้กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
+ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
 PHONE_REGEX = re.compile(r"^\d{10}$")
 
 
@@ -115,10 +116,16 @@ def handle_event(event):
                 else:
                     reply_message(
                         event.get("replyToken"),
-                        "Please send a valid 10-digit phone number.",
+                        "กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ).",
                     )
                 return
             if lower == "register":
+                if profile_doc.customer:
+                    reply_message(
+                        event.get("replyToken"),
+                        ALREADY_REGISTERED_MSG.format(name=profile_doc.customer),
+                    )
+                    return
                 clear_state(user_id)
                 save_state(user_id, {"stage": "awaiting_name"})
                 reply_message(event.get("replyToken"), REGISTER_PROMPT)
@@ -165,7 +172,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             profile_doc.save(ignore_permissions=True)
             reply_message(
                 reply_token,
-                f"Linked to existing customer {existing_customer}. Thank you!",
+                ALREADY_REGISTERED_MSG.format(name=existing_customer),
             )
             return
 
@@ -186,6 +193,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             {
                 "doctype": "Customer",
                 "customer_name": full_name,
+                "customer_type": "Individual",
                 "customer_group": customer_group,
                 "territory": territory,
                 "mobile_no": phone_number,
