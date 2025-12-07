@@ -6,7 +6,6 @@ import re
 
 import frappe
 from frappe.utils import now_datetime
-from frappe.utils.password import get_decrypted_password
 
 from line_integration.utils.line_client import (
     ensure_profile,
@@ -16,7 +15,7 @@ from line_integration.utils.line_client import (
 
 REGISTER_PROMPT = "Please tell us your name to get started."
 ASK_PHONE_PROMPT = "Thanks! Now please send your 10-digit phone number."
-PHONE_REGEX = re.compile(r"^\\d{10}$")
+PHONE_REGEX = re.compile(r"^\d{10}$")
 
 
 @frappe.whitelist(allow_guest=True)
@@ -25,7 +24,7 @@ def line_webhook():
     raw_body = frappe.request.get_data() or b""
     logger = frappe.logger("line_webhook")
     settings = get_settings()
-    signature = frappe.get_request_header("X-Line-Signature")
+    signature = (frappe.get_request_header("X-Line-Signature") or "").strip()
 
     logger.info(
         {
@@ -36,17 +35,26 @@ def line_webhook():
         }
     )
 
-    # password field; use decrypted secret
-    channel_secret = get_decrypted_password("LINE Settings", "LINE Settings", "channel_secret")
+    # password field; use decrypted secret (frappe handles password field decryption)
+    channel_secret = settings.get_password("channel_secret")
     if not signature or not channel_secret:
         logger.warning("Missing signature or channel secret")
         frappe.local.response.http_status_code = 400
         return "Missing signature or channel secret"
 
-    digest = hmac.new(
-        channel_secret.encode("utf-8"), raw_body, hashlib.sha256
-    ).digest()
-    expected_signature = base64.b64encode(digest).decode()
+    digest = hmac.new(channel_secret.encode("utf-8"), raw_body, hashlib.sha256).digest()
+    expected_signature = base64.b64encode(digest).decode().strip()
+
+    # Debug log to help diagnose signature mismatches (does not log secrets)
+    logger.info(
+        {
+            "event": "line_webhook_signature_check",
+            "provided_signature": signature,
+            "expected_signature": expected_signature,
+            "channel_secret_len": len(channel_secret) if channel_secret else 0,
+            "body_len": len(raw_body),
+        }
+    )
 
     if not hmac.compare_digest(expected_signature, signature):
         logger.warning("Invalid signature")
