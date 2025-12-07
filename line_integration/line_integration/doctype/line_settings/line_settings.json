@@ -1,0 +1,38 @@
+{
+  "name": "LINE Settings",
+  "module": "Line Integration",
+  "custom": 0,
+  "is_single": 1,
+  "fields": [
+    {
+      "fieldname": "enabled",
+      "fieldtype": "Check",
+      "label": "Enabled",
+      "default": "0"
+    },
+    {
+      "fieldname": "channel_id",
+      "fieldtype": "Data",
+      "label": "Channel ID"
+    },
+    {
+      "fieldname": "channel_secret",
+      "fieldtype": "Password",
+      "label": "Channel Secret"
+    },
+    {
+      "fieldname": "channel_access_token",
+      "fieldtype": "Password",
+      "label": "Channel Access Token"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}
