@@ -24,7 +24,8 @@
     {
       "fieldname": "channel_access_token",
       "fieldtype": "Password",
-      "label": "Channel Access Token"
+      "label": "Channel Access Token",
+      "length": 512
     }
   ],
   "permissions": [
