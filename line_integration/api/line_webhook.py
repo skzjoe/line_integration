@@ -127,18 +127,22 @@ def handle_event(event, settings):
             )
             order_reply_msg = settings.order_reply_message or DEFAULT_ORDER_REPLY
 
-            logger.info(
-                {
-                    "event": "line_keyword_check",
-                    "user_id": user_id,
-                    "text": text,
-                    "normalized": normalized,
-                    "register_keywords": register_keywords,
-                    "points_keywords": points_keywords,
-                    "menu_keywords": menu_keywords,
-                    "order_keywords": order_keywords,
-                }
-            )
+            keyword_log = {
+                "event": "line_keyword_check",
+                "user_id": user_id,
+                "text": text,
+                "normalized": normalized,
+                "register_keywords": register_keywords,
+                "points_keywords": points_keywords,
+                "menu_keywords": menu_keywords,
+                "order_keywords": order_keywords,
+            }
+            logger.info(keyword_log)
+            try:
+                # Duplicate into System Error Log so it is visible in the UI
+                frappe.log_error(keyword_log, "LINE Webhook Keyword Check")
+            except Exception:
+                logger.warning({"event": "line_keyword_check_log_error_failed"})
 
             if normalized in points_keywords["normalized"]:
                 reply_points(profile_doc, event.get("replyToken"))
@@ -258,128 +262,142 @@ def reply_points(profile_doc, reply_token):
 
 
 def reply_menu(reply_token, settings):
-    items = frappe.get_all(
-        "Item",
-        filters={"custom_add_in_line_menu": 1},
-        fields=["name", "item_name", "description", "custom_line_menu_image"],
-        limit=10,
-    )
-    if not items:
-        reply_message(reply_token, "ยังไม่มีเมนูที่พร้อมแสดงค่ะ")
-        return
+    logger = frappe.logger("line_webhook")
+    try:
+        items = frappe.get_all(
+            "Item",
+            filters={"custom_add_in_line_menu": 1},
+            fields=["name", "item_name", "description", "custom_line_menu_image"],
+            limit=10,
+        )
+        logger.info({"event": "line_menu_build", "items": len(items)})
+        if not items:
+            reply_message(reply_token, "ยังไม่มีเมนูที่พร้อมแสดงค่ะ")
+            return
 
-    summary_image = settings.menu_summary_image or (
-        frappe.local.conf.get("line_menu_summary_image")
-        if hasattr(frappe.local, "conf")
-        else None
-    )
-
-    bubbles = []
-    for item in items:
-        title = item.item_name or item.name
-        desc = (item.description or "").strip()
-        if len(desc) > 120:
-            desc = desc[:117] + "..."
-        image_url = None
-        if item.custom_line_menu_image:
+        summary_image = settings.menu_summary_image or (
+            frappe.local.conf.get("line_menu_summary_image")
+            if hasattr(frappe.local, "conf")
+            else None
+        )
+        summary_image_url = None
+        if summary_image:
             try:
-                image_url = get_url(item.custom_line_menu_image)
+                summary_image_url = get_url(summary_image)
             except Exception:
-                image_url = None
+                logger.warning({"event": "line_menu_summary_image_get_url_failed"})
 
-        body_contents = [
-            {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True},
-        ]
-        if desc:
-            body_contents.append(
-                {"type": "text", "text": desc, "size": "sm", "color": "#555555", "wrap": True}
-            )
+        bubbles = []
+        for item in items:
+            title = item.item_name or item.name
+            desc = (item.description or "").strip()
+            if len(desc) > 120:
+                desc = desc[:117] + "..."
+            image_url = None
+            if item.custom_line_menu_image:
+                try:
+                    image_url = get_url(item.custom_line_menu_image)
+                except Exception:
+                    logger.warning(
+                        {"event": "line_menu_item_image_get_url_failed", "item": item.name}
+                    )
 
-        bubble = {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "md",
-                "contents": body_contents,
-            },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        "color": "#22bb33",
-                        "action": {
-                            "type": "message",
-                            "label": "สั่งออเดอร์",
-                            "text": f"สั่งออเดอร์ {title}",
-                        },
-                    }
-                ],
-            },
-        }
-        if image_url:
-            bubble["hero"] = {
-                "type": "image",
-                "url": image_url,
-                "size": "full",
-                "aspect_ratio": "1:1",
-                "aspect_mode": "cover",
-            }
+            body_contents = [
+                {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True},
+            ]
+            if desc:
+                body_contents.append(
+                    {"type": "text", "text": desc, "size": "sm", "color": "#555555", "wrap": True}
+                )
 
-        bubbles.append(bubble)
-
-    menu_carousel = {
-        "type": "flex",
-        "altText": "เมนู Wellie",
-        "contents": {"type": "carousel", "contents": bubbles},
-    }
-
-    messages = []
-    if summary_image:
-        messages.append(
-            {
-                "type": "flex",
-                "altText": "เมนู Wellie",
-                "contents": {
-                    "type": "bubble",
-                    "hero": {
-                        "type": "image",
-                        "url": get_url(summary_image),
-                        "size": "full",
-                        "aspect_ratio": "20:13",
-                        "aspect_mode": "cover",
-                    },
-                    "body": {
-                        "type": "box",
-                        "layout": "vertical",
-                        "contents": [
-                            {
-                                "type": "text",
-                                "text": "เมนูวันนี้",
-                                "weight": "bold",
-                                "size": "lg",
+            bubble = {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "md",
+                    "contents": body_contents,
+                },
+                "footer": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "button",
+                            "style": "primary",
+                            "color": "#22bb33",
+                            "action": {
+                                "type": "message",
+                                "label": "สั่งออเดอร์",
+                                "text": f"สั่งออเดอร์ {title}",
                             },
-                            {
-                                "type": "text",
-                                "text": "เลือกดูเมนูหรือสั่งออเดอร์ได้เลยค่ะ",
-                                "size": "sm",
-                                "color": "#555555",
-                                "wrap": True,
-                                "margin": "sm",
-                            },
-                        ],
-                        "spacing": "md",
-                    },
+                        }
+                    ],
                 },
             }
-        )
+            if image_url:
+                bubble["hero"] = {
+                    "type": "image",
+                    "url": image_url,
+                    "size": "full",
+                    "aspect_ratio": "1:1",
+                    "aspect_mode": "cover",
+                }
 
-    messages.append(menu_carousel)
-    reply_message(reply_token, messages)
+            bubbles.append(bubble)
+
+        menu_carousel = {
+            "type": "flex",
+            "altText": "เมนู Wellie",
+            "contents": {"type": "carousel", "contents": bubbles},
+        }
+
+        messages = []
+        if summary_image_url:
+            messages.append(
+                {
+                    "type": "flex",
+                    "altText": "เมนู Wellie",
+                    "contents": {
+                        "type": "bubble",
+                        "hero": {
+                            "type": "image",
+                            "url": summary_image_url,
+                            "size": "full",
+                            "aspect_ratio": "20:13",
+                            "aspect_mode": "cover",
+                        },
+                        "body": {
+                            "type": "box",
+                            "layout": "vertical",
+                            "contents": [
+                                {
+                                    "type": "text",
+                                    "text": "เมนูวันนี้",
+                                    "weight": "bold",
+                                    "size": "lg",
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "เลือกดูเมนูหรือสั่งออเดอร์ได้เลยค่ะ",
+                                    "size": "sm",
+                                    "color": "#555555",
+                                    "wrap": True,
+                                    "margin": "sm",
+                                },
+                            ],
+                            "spacing": "md",
+                        },
+                    },
+                }
+            )
+
+        messages.append(menu_carousel)
+        reply_message(reply_token, messages)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "LINE Menu Error")
+        reply_message(reply_token, "ขออภัย ไม่สามารถแสดงเมนูได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")
 
 
 def reply_registered_flex(profile_doc, reply_token, settings):
