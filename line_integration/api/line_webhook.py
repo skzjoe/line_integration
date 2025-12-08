@@ -187,8 +187,7 @@ def reply_points(profile_doc, reply_token):
         lp_details = get_loyalty_program_details_with_points(
             customer=customer_name,
             loyalty_program=LOYALTY_PROGRAM,
-            company=frappe.db.get_default("company"),
-            posting_date=today(),
+            company=frappe.db.get_default("company")
         )
         points = (lp_details or {}).get("loyalty_points", 0) or 0
         reply_message(
