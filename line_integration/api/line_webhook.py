@@ -138,28 +138,11 @@ def handle_event(event, settings):
                 "order_keywords": order_keywords,
             }
             logger.info(keyword_log)
-            try:
-                # Duplicate into System Error Log so it is visible in the UI
-                frappe.log_error(keyword_log, "LINE Webhook Keyword Check")
-            except Exception:
-                logger.warning({"event": "line_keyword_check_log_error_failed"})
 
             if normalized in points_keywords["normalized"]:
                 reply_points(profile_doc, event.get("replyToken"))
                 return
             if normalized in menu_keywords["normalized"]:
-                try:
-                    frappe.log_error(
-                        {
-                            "event": "line_menu_trigger",
-                            "user_id": user_id,
-                            "text": text,
-                            "normalized": normalized,
-                        },
-                        "LINE Menu Trigger",
-                    )
-                except Exception:
-                    logger.warning({"event": "line_menu_trigger_log_error_failed"})
                 reply_menu(event.get("replyToken"), settings)
                 return
             if normalized in order_keywords["normalized"]:
@@ -354,8 +337,8 @@ def reply_menu(reply_token, settings):
                     "type": "image",
                     "url": image_url,
                     "size": "full",
-                    "aspect_ratio": "1:1",
-                    "aspect_mode": "cover",
+                    "aspectRatio": "1:1",
+                    "aspectMode": "cover",
                 }
 
             bubbles.append(bubble)
@@ -378,8 +361,8 @@ def reply_menu(reply_token, settings):
                             "type": "image",
                             "url": summary_image_url,
                             "size": "full",
-                            "aspect_ratio": "20:13",
-                            "aspect_mode": "cover",
+                            "aspectRatio": "20:13",
+                            "aspectMode": "cover",
                         },
                         "body": {
                             "type": "box",
