@@ -276,12 +276,7 @@ def reply_menu(reply_token, settings):
             if hasattr(frappe.local, "conf")
             else None
         )
-        summary_image_url = None
-        if summary_image:
-            try:
-                summary_image_url = get_url(summary_image)
-            except Exception:
-                logger.warning({"event": "line_menu_summary_image_get_url_failed"})
+        summary_image_url = resolve_public_image_url(summary_image, logger)
 
         bubbles = []
         for item in items:
@@ -289,14 +284,7 @@ def reply_menu(reply_token, settings):
             desc = (item.description or "").strip()
             if len(desc) > 120:
                 desc = desc[:117] + "..."
-            image_url = None
-            if item.custom_line_menu_image:
-                try:
-                    image_url = get_url(item.custom_line_menu_image)
-                except Exception:
-                    logger.warning(
-                        {"event": "line_menu_item_image_get_url_failed", "item": item.name}
-                    )
+            image_url = resolve_public_image_url(item.custom_line_menu_image, logger)
 
             body_contents = [
                 {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True},
@@ -324,14 +312,14 @@ def reply_menu(reply_token, settings):
                             "style": "primary",
                             "color": "#22bb33",
                             "action": {
-                                "type": "message",
-                                "label": "สั่งออเดอร์",
-                                "text": f"สั่งออเดอร์ {title}",
-                            },
-                        }
-                    ],
-                },
-            }
+                            "type": "message",
+                            "label": "สั่งออเดอร์",
+                            "text": f"สั่งออเดอร์ {title} 1",
+                        },
+                    }
+                ],
+            },
+        }
             if image_url:
                 bubble["hero"] = {
                     "type": "image",
@@ -357,13 +345,17 @@ def reply_menu(reply_token, settings):
                     "altText": "เมนู Wellie",
                     "contents": {
                         "type": "bubble",
-                        "hero": {
-                            "type": "image",
-                            "url": summary_image_url,
-                            "size": "full",
-                            "aspectRatio": "20:13",
-                            "aspectMode": "cover",
-                        },
+                        "hero": (
+                            {
+                                "type": "image",
+                                "url": summary_image_url,
+                                "size": "full",
+                                "aspectRatio": "20:13",
+                                "aspectMode": "cover",
+                            }
+                            if summary_image_url
+                            else None
+                        ),
                         "body": {
                             "type": "box",
                             "layout": "vertical",
@@ -520,6 +512,34 @@ def first_keyword(raw_text, default):
         if t:
             return t
     return default
+
+
+def resolve_public_image_url(path, logger=None):
+    """Return absolute URL only if the image is public; otherwise return None."""
+    if not path:
+        return None
+    # If already absolute URL, use it as-is
+    if isinstance(path, str) and path.startswith(("http://", "https://")):
+        return path
+    try:
+        file_doc = frappe.db.get_value(
+            "File",
+            {"file_url": path},
+            ["file_url", "is_private"],
+            as_dict=True,
+        )
+    except Exception:
+        file_doc = None
+    if file_doc and file_doc.get("is_private"):
+        if logger:
+            logger.warning({"event": "line_image_private", "file_url": path})
+        return None
+    try:
+        return get_url((file_doc and file_doc.get("file_url")) or path)
+    except Exception:
+        if logger:
+            logger.warning({"event": "line_image_get_url_failed", "file_url": path})
+        return None
 
 
 def register_customer(profile_doc, full_name, phone_number, reply_token):
