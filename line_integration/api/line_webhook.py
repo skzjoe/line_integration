@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import re
+import urllib.parse
 
 import frappe
 from frappe.utils import get_url, now_datetime, today
@@ -480,10 +481,11 @@ def reply_order_form(reply_token, settings):
                     {
                         "type": "button",
                         "style": "primary",
+                        # Use LINE deep link to prefill text in composer (user can edit before sending)
                         "action": {
-                            "type": "message",
+                            "type": "uri",
                             "label": "กรอกฟอร์มสั่งออเดอร์",
-                            "text": template_text,
+                            "uri": f"line://msg/text/{urllib.parse.quote(template_text)}",
                         },
                     }
                 ],
