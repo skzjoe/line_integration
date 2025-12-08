@@ -13,13 +13,12 @@ from line_integration.utils.line_client import (
     reply_message,
 )
 
-REGISTER_PROMPT = "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งชื่อที่ต้องการใช้งานมาให้เราค่ะ"
-ASK_PHONE_PROMPT = "ขอบคุณค่า! ตอนนี้กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
-ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
-CHECK_POINTS_KEY = "ตรวจสอบpointคงเหลือ"
-LOYALTY_PROGRAM = "Wellie Point"
-REGISTER_KEYWORDS = {"register", "สมัครสมาชิก", "สมาชิก"}
-MENU_KEYWORDS = {"เมนู"}
+# Fallback defaults; settings fields override these at runtime
+DEFAULT_REGISTER_PROMPT = "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งชื่อที่ต้องการใช้งานมาให้เราค่ะ"
+DEFAULT_ASK_PHONE_PROMPT = "ขอบคุณค่า! ตอนนี้กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
+DEFAULT_ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
+DEFAULT_ORDER_REPLY = "แจ้งรายการสั่งซื้อหรือพิมพ์ชื่อเมนูที่ต้องการได้เลยค่ะ"
+DEFAULT_LOYALTY_PROGRAM = "Wellie Point"
 PHONE_REGEX = re.compile(r"^\d{10}$")
 
 
@@ -108,15 +107,45 @@ def handle_event(event):
             text = (message.get("text") or "").strip()
             lower = text.lower()
             normalized = "".join(lower.split())
-            if normalized == CHECK_POINTS_KEY:
+
+            register_keywords = parse_keywords(
+                settings.register_keywords,
+                defaults=["register", "สมัครสมาชิก", "สมาชิก"],
+            )
+            points_keywords = parse_keywords(
+                settings.points_keywords,
+                defaults=["ตรวจสอบpointคงเหลือ"],
+            )
+            menu_keywords = parse_keywords(
+                settings.menu_keywords,
+                defaults=["เมนู"],
+            )
+            order_keyword = (settings.order_keyword or "สั่งออเดอร์").strip()
+            order_key_norm = (
+                "".join(order_keyword.lower().split()) if order_keyword else None
+            )
+            register_prompt = settings.register_prompt or DEFAULT_REGISTER_PROMPT
+            ask_phone_prompt = settings.ask_phone_prompt or DEFAULT_ASK_PHONE_PROMPT
+            already_registered_msg = (
+                settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
+            )
+            order_reply_msg = settings.order_reply_message or DEFAULT_ORDER_REPLY
+
+            if normalized in points_keywords:
                 reply_points(profile_doc, event.get("replyToken"))
                 return
-            if normalized in MENU_KEYWORDS:
-                reply_menu(event.get("replyToken"))
+            if normalized in menu_keywords:
+                reply_menu(event.get("replyToken"), settings)
+                return
+            if order_key_norm and normalized == order_key_norm:
+                reply_message(
+                    event.get("replyToken"),
+                    order_reply_msg,
+                )
                 return
             if state and state.get("stage") == "awaiting_name":
                 save_state(user_id, {"stage": "awaiting_phone", "name": text})
-                reply_message(event.get("replyToken"), ASK_PHONE_PROMPT)
+                reply_message(event.get("replyToken"), ask_phone_prompt)
                 return
             if state and state.get("stage") == "awaiting_phone":
                 if PHONE_REGEX.match(text):
@@ -130,13 +159,13 @@ def handle_event(event):
                         "กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ).",
                     )
                 return
-            if normalized in REGISTER_KEYWORDS:
+            if normalized in register_keywords:
                 if profile_doc.customer:
-                    reply_registered_flex(profile_doc, event.get("replyToken"))
+                    reply_registered_flex(profile_doc, event.get("replyToken"), settings)
                     return
                 clear_state(user_id)
                 save_state(user_id, {"stage": "awaiting_name"})
-                reply_message(event.get("replyToken"), REGISTER_PROMPT)
+                reply_message(event.get("replyToken"), register_prompt)
                 return
             if PHONE_REGEX.match(text):
                 link_customer(profile_doc, text, event.get("replyToken"))
@@ -147,6 +176,10 @@ def handle_event(event):
 
 
 def link_customer(profile_doc, phone_number, reply_token):
+    settings = get_settings()
+    already_registered_msg = (
+        settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
+    )
     customer_name = frappe.db.get_value(
         "Customer", {"mobile_no": phone_number}, "name"
     )
@@ -155,18 +188,27 @@ def link_customer(profile_doc, phone_number, reply_token):
         profile_doc.status = "Active"
         profile_doc.last_seen = now_datetime()
         profile_doc.save(ignore_permissions=True)
-        reply_message(reply_token, f"Linked to customer {customer_name}. Thank you!")
+        reply_message(
+            reply_token,
+            already_registered_msg.format(name=customer_name),
+        )
     else:
         reply_message(reply_token, "Customer not found. Please contact support.")
 
 
 def reply_points(profile_doc, reply_token):
     if not profile_doc.customer:
+        register_kw = first_keyword(
+            get_settings().register_keywords, default="สมัครสมาชิก"
+        )
         reply_message(
             reply_token,
-            "ยังไม่มีข้อมูลสมาชิก กรุณาพิมพ์ register เพื่อเริ่มลงทะเบียนค่ะ",
+            f"ยังไม่มีข้อมูลสมาชิก กรุณาพิมพ์ {register_kw} เพื่อเริ่มลงทะเบียนค่ะ",
         )
         return
+
+    settings = get_settings()
+    loyalty_program = settings.loyalty_program or DEFAULT_LOYALTY_PROGRAM
 
     try:
         try:
@@ -190,13 +232,12 @@ def reply_points(profile_doc, reply_token):
         )
         lp_details = get_loyalty_program_details_with_points(
             customer=customer_name,
-            loyalty_program=LOYALTY_PROGRAM,
-            company=frappe.db.get_default("company")
+            loyalty_program=loyalty_program,
         )
         points = (lp_details or {}).get("loyalty_points", 0) or 0
         reply_message(
             reply_token,
-            f"คุณ {display_name} มี Wellie Point คงเหลือ {points} แต้ม",
+            f"คุณ {display_name} มี {loyalty_program} คงเหลือ {points} แต้ม",
         )
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Points Check Error")
@@ -206,7 +247,7 @@ def reply_points(profile_doc, reply_token):
         )
 
 
-def reply_menu(reply_token):
+def reply_menu(reply_token, settings):
     items = frappe.get_all(
         "Item",
         filters={"custom_add_in_line_menu": 1},
@@ -216,6 +257,12 @@ def reply_menu(reply_token):
     if not items:
         reply_message(reply_token, "ยังไม่มีเมนูที่พร้อมแสดงค่ะ")
         return
+
+    summary_image = settings.menu_summary_image or (
+        frappe.local.conf.get("line_menu_summary_image")
+        if hasattr(frappe.local, "conf")
+        else None
+    )
 
     bubbles = []
     for item in items:
@@ -275,15 +322,57 @@ def reply_menu(reply_token):
 
         bubbles.append(bubble)
 
-    flex = {
+    menu_carousel = {
         "type": "flex",
         "altText": "เมนู Wellie",
         "contents": {"type": "carousel", "contents": bubbles},
     }
-    reply_message(reply_token, flex)
+
+    messages = []
+    if summary_image:
+        messages.append(
+            {
+                "type": "flex",
+                "altText": "เมนู Wellie",
+                "contents": {
+                    "type": "bubble",
+                    "hero": {
+                        "type": "image",
+                        "url": get_url(summary_image),
+                        "size": "full",
+                        "aspect_ratio": "20:13",
+                        "aspect_mode": "cover",
+                    },
+                    "body": {
+                        "type": "box",
+                        "layout": "vertical",
+                        "contents": [
+                            {
+                                "type": "text",
+                                "text": "เมนูวันนี้",
+                                "weight": "bold",
+                                "size": "lg",
+                            },
+                            {
+                                "type": "text",
+                                "text": "เลือกดูเมนูหรือสั่งออเดอร์ได้เลยค่ะ",
+                                "size": "sm",
+                                "color": "#555555",
+                                "wrap": True,
+                                "margin": "sm",
+                            },
+                        ],
+                        "spacing": "md",
+                    },
+                },
+            }
+        )
+
+    messages.append(menu_carousel)
+    reply_message(reply_token, messages)
 
 
-def reply_registered_flex(profile_doc, reply_token):
+def reply_registered_flex(profile_doc, reply_token, settings):
     customer = profile_doc.customer
     details = frappe.db.get_value(
         "Customer",
@@ -294,6 +383,10 @@ def reply_registered_flex(profile_doc, reply_token):
 
     display_name = (details and details.get("customer_name")) or customer or "สมาชิก"
     phone = (details and details.get("mobile_no")) or "-"
+    points_button_text = first_keyword(
+        settings.points_keywords, default="ตรวจสอบ Point คงเหลือ"
+    )
+    order_button_text = settings.order_keyword or "สั่งออเดอร์"
 
     flex = {
         "type": "flex",
@@ -319,12 +412,12 @@ def reply_registered_flex(profile_doc, reply_token):
                         "type": "button",
                         "style": "primary",
                         "color": "#22bb33",
-                        "action": {"type": "message", "label": "เช็คคะแนนคงเหลือ", "text": "ตรวจสอบ Point คงเหลือ"},
+                        "action": {"type": "message", "label": "เช็คคะแนนคงเหลือ", "text": points_button_text},
                     },
                     {
                         "type": "button",
                         "style": "secondary",
-                        "action": {"type": "message", "label": "สั่งออเดอร์", "text": "สั่งออเดอร์"},
+                        "action": {"type": "message", "label": "สั่งออเดอร์", "text": order_button_text},
                     },
                 ],
             },
@@ -334,9 +427,35 @@ def reply_registered_flex(profile_doc, reply_token):
     reply_message(reply_token, flex)
 
 
+def parse_keywords(raw_text, defaults=None):
+    defaults = defaults or []
+    raw = (raw_text or "").strip()
+    parts = []
+    if raw:
+        parts.extend([p for p in raw.replace("\n", ",").split(",") if p.strip()])
+    if not parts and defaults:
+        parts = defaults
+    normalized = set("".join(p.lower().split()) for p in parts)
+    return normalized
+
+
+def first_keyword(raw_text, default):
+    raw = (raw_text or "").replace("\n", ",")
+    for part in raw.split(","):
+        t = part.strip()
+        if t:
+            return t
+    return default
+
+
 def register_customer(profile_doc, full_name, phone_number, reply_token):
+    settings = get_settings()
+    already_registered_msg = (
+        settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
+    )
+    register_prompt = settings.register_prompt or DEFAULT_REGISTER_PROMPT
     if not full_name:
-        reply_message(reply_token, "Please tell us your name to continue.")
+        reply_message(reply_token, register_prompt)
         return
     if not phone_number or not PHONE_REGEX.match(phone_number):
         reply_message(reply_token, "Invalid phone number. Please send 10 digits.")
@@ -354,7 +473,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             profile_doc.save(ignore_permissions=True)
             reply_message(
                 reply_token,
-                ALREADY_REGISTERED_MSG.format(name=existing_customer),
+                already_registered_msg.format(name=existing_customer),
             )
             return
 

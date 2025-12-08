@@ -26,6 +26,86 @@
       "fieldtype": "Password",
       "label": "Channel Access Token",
       "length": 512
+    },
+    {
+      "fieldname": "section_keywords",
+      "fieldtype": "Section Break",
+      "label": "Keywords"
+    },
+    {
+      "fieldname": "register_keywords",
+      "fieldtype": "Small Text",
+      "label": "Register Keywords",
+      "description": "คำที่ใช้เริ่มต้นสมัครสมาชิก คั่นด้วยเครื่องหมายจุลภาค",
+      "default": "register,สมัครสมาชิก,สมาชิก"
+    },
+    {
+      "fieldname": "points_keywords",
+      "fieldtype": "Small Text",
+      "label": "Points Keywords",
+      "description": "คำที่ใช้ตรวจสอบคะแนน คั่นด้วยเครื่องหมายจุลภาค",
+      "default": "ตรวจสอบ point คงเหลือ"
+    },
+    {
+      "fieldname": "menu_keywords",
+      "fieldtype": "Small Text",
+      "label": "Menu Keywords",
+      "description": "คำที่ใช้เรียกดูเมนู คั่นด้วยเครื่องหมายจุลภาค",
+      "default": "เมนู"
+    },
+    {
+      "fieldname": "order_keyword",
+      "fieldtype": "Data",
+      "label": "Order Keyword",
+      "description": "คำที่ใช้เริ่มสั่งออเดอร์",
+      "default": "สั่งออเดอร์"
+    },
+    {
+      "fieldname": "menu_summary_image",
+      "fieldtype": "Attach Image",
+      "label": "Menu Summary Image",
+      "description": "รูปภาพสรุปเมนูที่ต้องการส่งก่อนคารูเซลเมนู"
+    },
+    {
+      "fieldname": "section_messages",
+      "fieldtype": "Section Break",
+      "label": "Messages"
+    },
+    {
+      "fieldname": "register_prompt",
+      "fieldtype": "Small Text",
+      "label": "Register Prompt",
+      "default": "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งชื่อที่ต้องการใช้งานมาให้เราค่ะ"
+    },
+    {
+      "fieldname": "ask_phone_prompt",
+      "fieldtype": "Small Text",
+      "label": "Ask Phone Prompt",
+      "default": "ขอบคุณค่า! ตอนนี้กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
+    },
+    {
+      "fieldname": "already_registered_message",
+      "fieldtype": "Small Text",
+      "label": "Already Registered Message",
+      "default": "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
+    },
+    {
+      "fieldname": "order_reply_message",
+      "fieldtype": "Small Text",
+      "label": "Order Reply Message",
+      "default": "แจ้งรายการสั่งซื้อหรือพิมพ์ชื่อเมนูที่ต้องการได้เลยค่ะ"
+    },
+    {
+      "fieldname": "section_loyalty",
+      "fieldtype": "Section Break",
+      "label": "Loyalty Program"
+    },
+    {
+      "fieldname": "loyalty_program",
+      "fieldtype": "Link",
+      "label": "Loyalty Program",
+      "options": "Loyalty Program",
+      "default": "Wellie Point"
     }
   ],
   "permissions": [
