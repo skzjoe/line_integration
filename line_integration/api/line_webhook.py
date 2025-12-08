@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 import re
-import urllib.parse
+# import urllib.parse
 
 import frappe
 from frappe.utils import get_url, now_datetime, today
@@ -473,23 +473,7 @@ def reply_order_form(reply_token, settings):
                 "spacing": "md",
                 "contents": body_contents,
             },
-            "footer": {
-                "type": "box",
-                "layout": "vertical",
-                "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "button",
-                        "style": "primary",
-                        # Use LINE deep link to prefill text in composer (user can edit before sending)
-                        "action": {
-                            "type": "uri",
-                            "label": "กรอกฟอร์มสั่งออเดอร์",
-                            "uri": f"line://msg/text/{urllib.parse.quote(template_text)}",
-                        },
-                    }
-                ],
-            },
+            # Footer intentionally omitted to avoid auto-send/share; instructions are in text message below
         }
         if summary_image_url:
             bubble["hero"] = {
@@ -501,16 +485,19 @@ def reply_order_form(reply_token, settings):
                 "action": {"type": "uri", "label": "ดูภาพ", "uri": summary_image_url},
             }
 
-        flex = {
+        flex_msg = {
             "type": "flex",
             "altText": "ฟอร์มสั่งออเดอร์",
             "contents": bubble,
         }
 
-        sent = reply_message(reply_token, flex)
-        logger.info(
-            {"event": "line_order_form_reply_attempt", "sent": bool(sent), "item_count": len(items or [])}
+        text_msg = (
+            "คัดลอกข้อความนี้ แก้ไขจำนวน/หมายเหตุ แล้วส่งกลับได้เลย\n"
+            f"{template_text}"
         )
+
+        sent = reply_message(reply_token, [flex_msg, {"type": "text", "text": text_msg}])
+        logger.info({"event": "line_order_form_reply_attempt", "sent": bool(sent), "item_count": len(items or [])})
         if not sent:
             frappe.log_error(
                 {
