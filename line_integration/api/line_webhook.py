@@ -284,10 +284,6 @@ def reply_menu(reply_token, settings):
         )
         menu_info = {"event": "line_menu_build", "items": len(items)}
         logger.info(menu_info)
-        try:
-            frappe.log_error(menu_info, "LINE Menu Build")
-        except Exception:
-            logger.warning({"event": "line_menu_build_log_error_failed"})
         if not items:
             reply_message(reply_token, "ยังไม่มีเมนูที่พร้อมแสดงค่ะ")
             return
@@ -411,7 +407,24 @@ def reply_menu(reply_token, settings):
             )
 
         messages.append(menu_carousel)
-        reply_message(reply_token, messages)
+        sent = reply_message(reply_token, messages)
+        logger.info(
+            {
+                "event": "line_menu_reply_attempt",
+                "sent": bool(sent),
+                "item_count": len(items),
+                "has_summary": bool(summary_image_url),
+            }
+        )
+        if not sent:
+            frappe.log_error(
+                {
+                    "event": "line_menu_reply_failed",
+                    "item_count": len(items),
+                    "has_summary": bool(summary_image_url),
+                },
+                "LINE Menu Reply Failed",
+            )
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Menu Error")
         reply_message(reply_token, "ขออภัย ไม่สามารถแสดงเมนูได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")

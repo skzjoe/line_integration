@@ -18,14 +18,18 @@ def _headers(token):
 
 
 def reply_message(reply_token, content):
+    logger = frappe.logger("line_webhook")
     if not reply_token:
-        return
+        logger.info({"event": "line_reply_skip", "reason": "missing_reply_token"})
+        return False
     settings = get_settings()
     if not settings.enabled:
-        return
+        logger.info({"event": "line_reply_skip", "reason": "settings_disabled"})
+        return False
     access_token = get_decrypted_password("LINE Settings", "LINE Settings", "channel_access_token") or ""
     if not access_token:
-        return
+        logger.warning({"event": "line_reply_skip", "reason": "missing_access_token"})
+        return False
     url = "https://api.line.me/v2/bot/message/reply"
     messages = []
     if isinstance(content, str):
@@ -35,37 +39,103 @@ def reply_message(reply_token, content):
     elif isinstance(content, (list, tuple)):
         messages = list(content)
     else:
-        return
+        logger.warning({"event": "line_reply_skip", "reason": "unsupported_content_type"})
+        return False
     payload = {"replyToken": reply_token, "messages": messages}
     try:
-        requests.post(
+        resp = requests.post(
             url,
             data=json.dumps(payload),
             headers=_headers(access_token),
             timeout=10,
         )
+        if resp.status_code != 200:
+            logger.error(
+                {
+                    "event": "line_reply_failed",
+                    "status": resp.status_code,
+                    "body": resp.text,
+                    "payload_messages": messages,
+                }
+            )
+            try:
+                frappe.log_error(
+                    {
+                        "event": "line_reply_failed",
+                        "status": resp.status_code,
+                        "body": resp.text,
+                        "payload_messages": messages,
+                    },
+                    "LINE Reply Error",
+                )
+            except Exception:
+                logger.warning({"event": "line_reply_log_error_failed"})
+            return False
+        else:
+            logger.info(
+                {
+                    "event": "line_reply_success",
+                    "status": resp.status_code,
+                    "payload_messages": messages,
+                }
+            )
+            return True
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Reply Error")
+        return False
 
 
 def push_message(user_id, text):
+    logger = frappe.logger("line_webhook")
     if not user_id:
+        logger.info({"event": "line_push_skip", "reason": "missing_user_id"})
         return
     settings = get_settings()
     if not settings.enabled:
+        logger.info({"event": "line_push_skip", "reason": "settings_disabled"})
         return
     access_token = get_decrypted_password("LINE Settings", "LINE Settings", "channel_access_token") or ""
     if not access_token:
+        logger.warning({"event": "line_push_skip", "reason": "missing_access_token"})
         return
     url = "https://api.line.me/v2/bot/message/push"
     payload = {"to": user_id, "messages": [{"type": "text", "text": text}]}
     try:
-        requests.post(
+        resp = requests.post(
             url,
             data=json.dumps(payload),
             headers=_headers(access_token),
             timeout=10,
         )
+        if resp.status_code != 200:
+            logger.error(
+                {
+                    "event": "line_push_failed",
+                    "status": resp.status_code,
+                    "body": resp.text,
+                    "payload_messages": payload.get("messages"),
+                }
+            )
+            try:
+                frappe.log_error(
+                    {
+                        "event": "line_push_failed",
+                        "status": resp.status_code,
+                        "body": resp.text,
+                        "payload_messages": payload.get("messages"),
+                    },
+                    "LINE Push Error",
+                )
+            except Exception:
+                logger.warning({"event": "line_push_log_error_failed"})
+        else:
+            logger.info(
+                {
+                    "event": "line_push_success",
+                    "status": resp.status_code,
+                    "payload_messages": payload.get("messages"),
+                }
+            )
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Push Error")
 
