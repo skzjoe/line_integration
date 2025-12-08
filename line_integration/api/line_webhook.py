@@ -148,6 +148,18 @@ def handle_event(event, settings):
                 reply_points(profile_doc, event.get("replyToken"))
                 return
             if normalized in menu_keywords["normalized"]:
+                try:
+                    frappe.log_error(
+                        {
+                            "event": "line_menu_trigger",
+                            "user_id": user_id,
+                            "text": text,
+                            "normalized": normalized,
+                        },
+                        "LINE Menu Trigger",
+                    )
+                except Exception:
+                    logger.warning({"event": "line_menu_trigger_log_error_failed"})
                 reply_menu(event.get("replyToken"), settings)
                 return
             if normalized in order_keywords["normalized"]:
@@ -270,7 +282,12 @@ def reply_menu(reply_token, settings):
             fields=["name", "item_name", "description", "custom_line_menu_image"],
             limit=10,
         )
-        logger.info({"event": "line_menu_build", "items": len(items)})
+        menu_info = {"event": "line_menu_build", "items": len(items)}
+        logger.info(menu_info)
+        try:
+            frappe.log_error(menu_info, "LINE Menu Build")
+        except Exception:
+            logger.warning({"event": "line_menu_build_log_error_failed"})
         if not items:
             reply_message(reply_token, "ยังไม่มีเมนูที่พร้อมแสดงค่ะ")
             return
