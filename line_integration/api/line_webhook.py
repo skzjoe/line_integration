@@ -146,10 +146,7 @@ def handle_event(event, settings):
                 reply_menu(event.get("replyToken"), settings)
                 return
             if normalized in order_keywords["normalized"]:
-                reply_message(
-                    event.get("replyToken"),
-                    order_reply_msg,
-                )
+                reply_order_form(event.get("replyToken"), settings)
                 return
             if state and state.get("stage") == "awaiting_name":
                 save_state(user_id, {"stage": "awaiting_phone", "name": text})
@@ -350,8 +347,8 @@ def reply_menu(reply_token, settings):
                             "action": {
                                 "type": "message",
                                 "label": "สั่งออเดอร์",
-                                # Provide a ready-to-edit template the user can send
-                                "text": f"สั่งออเดอร์\nเมนู: {title}\nจำนวน: 1\nหมายเหตุ: ",
+                                # Send simple trigger; system will reply with form
+                                "text": "สั่งออเดอร์",
                             },
                         }
                     ],
@@ -397,6 +394,132 @@ def reply_menu(reply_token, settings):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Menu Error")
         reply_message(reply_token, "ขออภัย ไม่สามารถแสดงเมนูได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")
+
+
+def reply_order_form(reply_token, settings):
+    """Send a single flex message with form template for user to fill quantities."""
+    logger = frappe.logger("line_webhook")
+    try:
+        items = frappe.get_all(
+            "Item",
+            filters={"custom_add_in_line_menu": 1},
+            fields=["name", "item_name"],
+            limit=20,
+        )
+        template_lines = ["สั่งออเดอร์"]
+        for idx, item in enumerate(items or [], start=1):
+            title = item.item_name or item.name
+            template_lines.append(f"{idx}) {title} จำนวน: ")
+        template_lines.append("หมายเหตุ: ")
+        template_text = "\n".join(template_lines)
+
+        summary_image = settings.menu_summary_image or (
+            frappe.local.conf.get("line_menu_summary_image")
+            if hasattr(frappe.local, "conf")
+            else None
+        )
+        summary_image_url = resolve_public_image_url(summary_image, logger)
+
+        body_contents = [
+            {"type": "text", "text": "ฟอร์มสั่งออเดอร์", "weight": "bold", "size": "lg"},
+            {
+                "type": "text",
+                "text": "กรอกจำนวนแล้วส่งกลับได้เลย",
+                "size": "sm",
+                "color": "#555555",
+                "wrap": True,
+                "margin": "sm",
+            },
+        ]
+        if items:
+            body_contents.append(
+                {
+                    "type": "text",
+                    "text": "เมนู:",
+                    "weight": "bold",
+                    "size": "sm",
+                    "margin": "md",
+                }
+            )
+            for idx, item in enumerate(items, start=1):
+                body_contents.append(
+                    {
+                        "type": "text",
+                        "text": f"{idx}) {item.item_name or item.name}",
+                        "size": "sm",
+                        "color": "#444444",
+                        "wrap": True,
+                        "margin": "xs",
+                    }
+                )
+        else:
+            body_contents.append(
+                {
+                    "type": "text",
+                    "text": "ยังไม่มีเมนูในระบบ",
+                    "size": "sm",
+                    "color": "#555555",
+                    "wrap": True,
+                    "margin": "md",
+                }
+            )
+
+        bubble = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "md",
+                "contents": body_contents,
+            },
+            "footer": {
+                "type": "box",
+                "layout": "vertical",
+                "spacing": "sm",
+                "contents": [
+                    {
+                        "type": "button",
+                        "style": "primary",
+                        "action": {
+                            "type": "message",
+                            "label": "กรอกฟอร์มสั่งออเดอร์",
+                            "text": template_text,
+                        },
+                    }
+                ],
+            },
+        }
+        if summary_image_url:
+            bubble["hero"] = {
+                "type": "image",
+                "url": summary_image_url,
+                "size": "full",
+                "aspectRatio": "20:13",
+                "aspectMode": "cover",
+                "action": {"type": "uri", "label": "ดูภาพ", "uri": summary_image_url},
+            }
+
+        flex = {
+            "type": "flex",
+            "altText": "ฟอร์มสั่งออเดอร์",
+            "contents": bubble,
+        }
+
+        sent = reply_message(reply_token, flex)
+        logger.info(
+            {"event": "line_order_form_reply_attempt", "sent": bool(sent), "item_count": len(items or [])}
+        )
+        if not sent:
+            frappe.log_error(
+                {
+                    "event": "line_order_form_reply_failed",
+                    "item_count": len(items or []),
+                },
+                "LINE Order Form Reply Failed",
+            )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "LINE Order Form Error")
+        reply_message(reply_token, "ขออภัย ไม่สามารถส่งฟอร์มสั่งออเดอร์ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")
 
 
 def reply_registered_flex(profile_doc, reply_token, settings):
