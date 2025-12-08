@@ -1,0 +1,7 @@
+include *.md
+include *.py
+include *.txt
+include *.json
+
+recursive-include line_integration *.css *.csv *.html *.ico *.js *.json *.md *.png *.svg *.txt
+recursive-exclude line_integration *.pyc
