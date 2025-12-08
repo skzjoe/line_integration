@@ -279,6 +279,42 @@ def reply_menu(reply_token, settings):
         summary_image_url = resolve_public_image_url(summary_image, logger)
 
         bubbles = []
+        # Optional summary bubble goes first
+        if summary_image_url:
+            summary_bubble = {
+                "type": "bubble",
+                "hero": {
+                    "type": "image",
+                    "url": summary_image_url,
+                    "size": "full",
+                    "aspectRatio": "20:13",
+                    "aspectMode": "cover",
+                    "action": {"type": "uri", "label": "ดูภาพ", "uri": summary_image_url},
+                },
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "เมนูวันนี้",
+                            "weight": "bold",
+                            "size": "lg",
+                        },
+                        {
+                            "type": "text",
+                            "text": "เลือกดูเมนูหรือคัดลอกฟอร์มสั่งออเดอร์แล้วส่งกลับได้เลยค่ะ",
+                            "size": "sm",
+                            "color": "#555555",
+                            "wrap": True,
+                            "margin": "sm",
+                        },
+                    ],
+                    "spacing": "md",
+                },
+            }
+            bubbles.append(summary_bubble)
+
         for item in items:
             title = item.item_name or item.name
             desc = (item.description or "").strip()
@@ -312,14 +348,15 @@ def reply_menu(reply_token, settings):
                             "style": "primary",
                             "color": "#22bb33",
                             "action": {
-                            "type": "message",
-                            "label": "สั่งออเดอร์",
-                            "text": f"สั่งออเดอร์ {title} 1",
-                        },
-                    }
-                ],
-            },
-        }
+                                "type": "message",
+                                "label": "สั่งออเดอร์",
+                                # Provide a ready-to-edit template the user can send
+                                "text": f"สั่งออเดอร์\nเมนู: {title}\nจำนวน: 1\nหมายเหตุ: ",
+                            },
+                        }
+                    ],
+                },
+            }
             if image_url:
                 bubble["hero"] = {
                     "type": "image",
@@ -327,6 +364,7 @@ def reply_menu(reply_token, settings):
                     "size": "full",
                     "aspectRatio": "1:1",
                     "aspectMode": "cover",
+                    "action": {"type": "uri", "label": "ดูภาพ", "uri": image_url},
                 }
 
             bubbles.append(bubble)
@@ -337,52 +375,8 @@ def reply_menu(reply_token, settings):
             "contents": {"type": "carousel", "contents": bubbles},
         }
 
-        messages = []
-        if summary_image_url:
-            messages.append(
-                {
-                    "type": "flex",
-                    "altText": "เมนู Wellie",
-                    "contents": {
-                        "type": "bubble",
-                        "hero": (
-                            {
-                                "type": "image",
-                                "url": summary_image_url,
-                                "size": "full",
-                                "aspectRatio": "20:13",
-                                "aspectMode": "cover",
-                            }
-                            if summary_image_url
-                            else None
-                        ),
-                        "body": {
-                            "type": "box",
-                            "layout": "vertical",
-                            "contents": [
-                                {
-                                    "type": "text",
-                                    "text": "เมนูวันนี้",
-                                    "weight": "bold",
-                                    "size": "lg",
-                                },
-                                {
-                                    "type": "text",
-                                    "text": "เลือกดูเมนูหรือสั่งออเดอร์ได้เลยค่ะ",
-                                    "size": "sm",
-                                    "color": "#555555",
-                                    "wrap": True,
-                                    "margin": "sm",
-                                },
-                            ],
-                            "spacing": "md",
-                        },
-                    },
-                }
-            )
-
-        messages.append(menu_carousel)
-        sent = reply_message(reply_token, messages)
+        # Send as a single message (carousel) so userเลื่อนดูได้ในชุดเดียว
+        sent = reply_message(reply_token, menu_carousel)
         logger.info(
             {
                 "event": "line_menu_reply_attempt",
