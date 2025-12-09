@@ -42,10 +42,16 @@ def quick_pay_sales_order(sales_order: str, points_to_redeem: float = 0):
             fields=["line_user_id"],
         )
         if profiles:
+            remaining = 0
+            try:
+                lp_details = _get_loyalty_details(so.customer, settings)
+                remaining = lp_details.get("loyalty_points", 0) or 0
+            except Exception:
+                remaining = 0
             text = (
-                f"แจ้งยอดออเดอร์ {so.name}\n"
-                f"ใช้แต้ม {format_qty(points_used)} "
-                f"(มูลค่า {frappe.utils.fmt_money(amount_used, currency=si.currency)})"
+                f"ได้มีการใช้คะแนนสะสม {format_qty(points_used)} แต้ม "
+                f"กับหมายเลขออเดอร์ {so.name}\n"
+                f"คงเหลือ {format_qty(remaining)} แต้ม"
             )
             for p in profiles:
                 push_message(p.line_user_id, text)
