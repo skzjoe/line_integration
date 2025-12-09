@@ -36,6 +36,7 @@ function quickPay(frm) {
 		const points = data.points || 0;
 		const value_per_point = data.value_per_point || 0;
 		const max_amount = data.max_amount || 0;
+		const saved_points = data.saved_points || 0;
 
 		if (points > 0 && value_per_point > 0 && max_amount > 0) {
 			const d = new frappe.ui.Dialog({
@@ -48,7 +49,7 @@ function quickPay(frm) {
 						fieldtype: "Int",
 						label: __("Points to Redeem"),
 						fieldname: "points_to_redeem",
-						default: 0,
+						default: saved_points || 0,
 						description: __("ใส่ 0 หากไม่ใช้คะแนน"),
 					},
 				],

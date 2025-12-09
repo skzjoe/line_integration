@@ -49,6 +49,10 @@ def _make_sales_invoice(so, points_to_redeem=0, settings=None):
         si.loyalty_amount = redeem_amount
         si.loyalty_program = settings.loyalty_program
         si.dont_create_loyalty_points = 1
+        if getattr(settings, "redeem_account", None):
+            si.redemption_account = settings.redeem_account
+        if getattr(settings, "redeem_cost_center", None):
+            si.redemption_cost_center = settings.redeem_cost_center
 
     si.flags.ignore_permissions = True
     si.insert(ignore_permissions=True)
@@ -148,6 +152,7 @@ def get_loyalty_balance(sales_order: str):
         "points": points,
         "value_per_point": value_per_point,
         "max_amount": max_amount,
+        "saved_points": float(so.get("line_loyalty_points") or 0),
     }
 
 

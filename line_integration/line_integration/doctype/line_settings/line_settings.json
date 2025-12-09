@@ -196,6 +196,22 @@
       "description": "ใช้สำหรับปุ่ม Quick Pay ที่สร้าง Sales Invoice + Payment Entry อัตโนมัติ"
     },
     {
+      "fieldname": "redeem_account",
+      "fieldtype": "Link",
+      "label": "Loyalty Redemption Account",
+      "options": "Account",
+      "description": "บัญชีตัดแต้ม สำหรับ Quick Pay/Request Payment",
+      "default": ""
+    },
+    {
+      "fieldname": "redeem_cost_center",
+      "fieldtype": "Link",
+      "label": "Loyalty Redemption Cost Center",
+      "options": "Cost Center",
+      "description": "Cost Center สำหรับบันทึกค่าแต้ม",
+      "default": ""
+    },
+    {
       "fieldname": "section_request_pay",
       "fieldtype": "Section Break",
       "label": "Request Payment"
