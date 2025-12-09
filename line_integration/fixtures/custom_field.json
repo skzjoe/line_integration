@@ -29,5 +29,27 @@
     "insert_after": "items",
     "owner": "Administrator",
     "read_only": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "line_loyalty_points",
+    "dt": "Sales Order",
+    "fieldname": "line_loyalty_points",
+    "label": "LINE Loyalty Points Used",
+    "fieldtype": "Float",
+    "insert_after": "line_order_note",
+    "owner": "Administrator",
+    "read_only": 1
+  },
+  {
+    "doctype": "Custom Field",
+    "name": "line_loyalty_amount",
+    "dt": "Sales Order",
+    "fieldname": "line_loyalty_amount",
+    "label": "LINE Loyalty Amount",
+    "fieldtype": "Currency",
+    "insert_after": "line_loyalty_points",
+    "owner": "Administrator",
+    "read_only": 1
   }
 ]

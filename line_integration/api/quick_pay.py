@@ -21,6 +21,10 @@ def quick_pay_sales_order(sales_order: str, points_to_redeem: float = 0):
     if so.docstatus != 1:
         frappe.throw(_("Sales Order must be Submitted"))
 
+    # If no points passed, use stored value on SO if any
+    if not points_to_redeem:
+        points_to_redeem = float(so.get("line_loyalty_points") or 0)
+
     si = _make_sales_invoice(so, points_to_redeem, settings)
     pe = _make_payment_entry(si, mop)
 
@@ -36,16 +40,15 @@ def _make_sales_invoice(so, points_to_redeem=0, settings=None):
     si = make_sales_invoice(so.name)
     redeem_amount = 0
     if points_to_redeem and settings:
-        try:
-            lp_details = _get_loyalty_details(so.customer, settings)
-            value_per_point = lp_details.get("conversion_factor") or 0
-            redeem_amount = float(points_to_redeem) * float(value_per_point or 0)
-        except Exception:
-            redeem_amount = 0
+        redeem = _compute_redeem(so.customer, settings, points_to_redeem, so.grand_total)
+        points_to_redeem = redeem["points_used"]
+        redeem_amount = redeem["amount_used"]
     if redeem_amount > 0:
-        si.apply_discount_on = "Grand Total"
-        si.discount_amount = redeem_amount
+        si.redeem_loyalty_points = 1
         si.loyalty_points = points_to_redeem
+        si.loyalty_amount = redeem_amount
+        si.loyalty_program = settings.loyalty_program
+        si.dont_create_loyalty_points = 1
 
     si.flags.ignore_permissions = True
     si.insert(ignore_permissions=True)
@@ -81,8 +84,20 @@ def request_payment(sales_order: str):
     if so.docstatus != 1:
         frappe.throw(_("Sales Order must be Submitted"))
 
+    points_to_redeem = float(frappe.form_dict.get("points_to_redeem") or 0)
+    redeem_amount = 0
+    if points_to_redeem:
+        redeem = _compute_redeem(so.customer, settings, points_to_redeem, so.grand_total)
+        points_to_redeem = redeem["points_used"]
+        redeem_amount = redeem["amount_used"]
+
+    # Store on Sales Order
+    so.db_set("line_loyalty_points", points_to_redeem)
+    so.db_set("line_loyalty_amount", redeem_amount)
+
     total_text = frappe.utils.fmt_money(so.grand_total, currency=so.currency)
     total_qty = sum((row.qty or 0) for row in (so.items or []))
+    net_total = so.grand_total - redeem_amount
 
     lines = [
         message,
@@ -91,7 +106,10 @@ def request_payment(sales_order: str):
     for row in so.items or []:
         lines.append(f"{row.item_name or row.item_code} {format_qty(row.qty)} ขวด")
     lines.append(f"รวม {format_qty(total_qty)} ขวด")
-    lines.append(f"ยอดรวม {total_text}")
+    lines.append(f"ยอดเต็ม {total_text}")
+    if redeem_amount:
+        lines.append(f"ใช้แต้ม {format_qty(points_to_redeem)} (มูลค่า {frappe.utils.fmt_money(redeem_amount, currency=so.currency)})")
+        lines.append(f"ยอดสุทธิ {frappe.utils.fmt_money(net_total, currency=so.currency)}")
     text = "\n".join(lines)
 
     if not qr_url:
@@ -145,6 +163,50 @@ def _get_loyalty_details(customer, settings):
         ) or {}
     except Exception:
         return {}
+
+
+def _compute_redeem(customer, settings, points_requested, max_amount):
+    lp_details = _get_loyalty_details(customer, settings)
+    available_points = float(lp_details.get("loyalty_points", 0) or 0)
+    conversion = float(lp_details.get("conversion_factor", 0) or 0)
+    if conversion <= 0:
+        return {"points_used": 0, "amount_used": 0}
+
+    points_to_use = min(float(points_requested or 0), available_points)
+    amount = points_to_use * conversion
+    if amount > max_amount:
+        amount = max_amount
+        points_to_use = amount / conversion
+    # round down to integer points
+    points_to_use = int(points_to_use)
+    amount = points_to_use * conversion
+    return {"points_used": points_to_use, "amount_used": amount}
+
+
+@frappe.whitelist()
+def get_pending_order_items():
+    """Return aggregated pending items for all submitted, not fully delivered Sales Orders."""
+    rows = frappe.db.sql(
+        """
+        SELECT soi.item_name, soi.item_code,
+               SUM(GREATEST(soi.qty - soi.delivered_qty, 0)) as pending_qty
+        FROM `tabSales Order Item` soi
+        JOIN `tabSales Order` so ON soi.parent = so.name
+        WHERE so.docstatus = 1
+          AND IFNULL(so.status, '') NOT IN ('Closed', 'Completed')
+          AND IFNULL(so.per_delivered, 0) < 100
+        GROUP BY soi.item_name, soi.item_code
+        HAVING pending_qty > 0
+        ORDER BY soi.item_name
+        """,
+        as_dict=True,
+    )
+    if not rows:
+        return ""
+    lines = []
+    for row in rows:
+        lines.append(f"{row.item_name or row.item_code} : {format_qty(row.pending_qty)}")
+    return "\n".join(lines)
 
 
 @frappe.whitelist()

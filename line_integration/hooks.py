@@ -15,7 +15,17 @@ fixtures = [
 	{
 		"doctype": "Custom Field",
 		"filters": [
-			["fieldname", "in", ["custom_add_in_line_menu", "custom_line_menu_image", "line_order_note"]]
+			[
+				"fieldname",
+				"in",
+				[
+					"custom_add_in_line_menu",
+					"custom_line_menu_image",
+					"line_order_note",
+					"line_loyalty_points",
+					"line_loyalty_amount",
+				],
+			]
 		],
 	}
 ]
@@ -59,6 +69,9 @@ fixtures = [
 
 doctype_js = {
 	"Sales Order": "public/js/sales_order_quick_pay.js",
+}
+doctype_list_js = {
+	"Sales Order": "public/js/sales_order_list.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}

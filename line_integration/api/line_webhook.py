@@ -849,11 +849,16 @@ def build_summary_bubble(image_url, title, subtitle, body_contents=None, aspect_
         }
     # Ensure title/subtitle at top
     if contents == body_contents:
-        bubble["body"]["contents"] = [
+        new_contents = [
             {"type": "text", "text": title, "weight": "bold", "size": "lg"},
             {"type": "text", "text": subtitle, "size": "sm", "color": "#555555", "wrap": True, "margin": "sm"},
-            *contents,
         ]
+        # add a CTA line
+        new_contents.append(
+            {"type": "text", "text": "กดที่รูปภาพเพื่อดูเมนู", "size": "sm", "color": "#22bb33", "wrap": True}
+        )
+        new_contents.extend(contents)
+        bubble["body"]["contents"] = new_contents
     return bubble
 
 
