@@ -829,15 +829,7 @@ def fetch_menu_items(limit=10, order_by="item_name asc"):
 
 def build_summary_bubble(image_url, title, subtitle, body_contents=None, aspect_ratio="1:1"):
     contents = body_contents or []
-    bubble = {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": contents,
-            "spacing": "md",
-        },
-    }
+    bubble = {"type": "bubble"}
     if image_url:
         bubble["hero"] = {
             "type": "image",
@@ -847,18 +839,6 @@ def build_summary_bubble(image_url, title, subtitle, body_contents=None, aspect_
             "aspectMode": "cover",
             "action": {"type": "uri", "label": "ดูภาพ", "uri": image_url},
         }
-    # Ensure title/subtitle at top
-    if contents == body_contents:
-        new_contents = [
-            {"type": "text", "text": title, "weight": "bold", "size": "lg"},
-            {"type": "text", "text": subtitle, "size": "sm", "color": "#555555", "wrap": True, "margin": "sm"},
-        ]
-        # add a CTA line
-        new_contents.append(
-            {"type": "text", "text": "กดที่รูปภาพเพื่อดูเมนู", "size": "sm", "color": "#22bb33", "wrap": True}
-        )
-        new_contents.extend(contents)
-        bubble["body"]["contents"] = new_contents
     return bubble
 
 
