@@ -14,7 +14,9 @@ doc_events = {
 fixtures = [
 	{
 		"doctype": "Custom Field",
-		"filters": [["name", "in", ["custom_add_in_line_menu", "custom_line_menu_image"]]],
+		"filters": [
+			["fieldname", "in", ["custom_add_in_line_menu", "custom_line_menu_image", "line_order_note"]]
+		],
 	}
 ]
 

@@ -7,7 +7,7 @@ from frappe.utils.jinja import render_template
 
 
 @frappe.whitelist()
-def quick_pay_sales_order(sales_order: str):
+def quick_pay_sales_order(sales_order: str, points_to_redeem: float = 0):
     """Create Sales Invoice + Payment Entry for a submitted Sales Order."""
     if not sales_order:
         frappe.throw(_("Sales Order is required"))
@@ -21,16 +21,32 @@ def quick_pay_sales_order(sales_order: str):
     if so.docstatus != 1:
         frappe.throw(_("Sales Order must be Submitted"))
 
-    si = _make_sales_invoice(so)
+    si = _make_sales_invoice(so, points_to_redeem, settings)
     pe = _make_payment_entry(si, mop)
 
-    return _("Created Sales Invoice {0} and Payment Entry {1}").format(si.name, pe.name)
+    msg = _("Created Sales Invoice {0} and Payment Entry {1}").format(si.name, pe.name)
+    if points_to_redeem:
+        msg += _("<br>Redeemed points: {0}").format(points_to_redeem)
+    return msg
 
 
-def _make_sales_invoice(so):
+def _make_sales_invoice(so, points_to_redeem=0, settings=None):
     from erpnext.selling.doctype.sales_order.sales_order import make_sales_invoice
 
     si = make_sales_invoice(so.name)
+    redeem_amount = 0
+    if points_to_redeem and settings:
+        try:
+            lp_details = _get_loyalty_details(so.customer, settings)
+            value_per_point = lp_details.get("conversion_factor") or 0
+            redeem_amount = float(points_to_redeem) * float(value_per_point or 0)
+        except Exception:
+            redeem_amount = 0
+    if redeem_amount > 0:
+        si.apply_discount_on = "Grand Total"
+        si.discount_amount = redeem_amount
+        si.loyalty_points = points_to_redeem
+
     si.flags.ignore_permissions = True
     si.insert(ignore_permissions=True)
     si.submit()
@@ -97,6 +113,38 @@ def request_payment(sales_order: str):
             sent_count += 1
 
     return _("Sent payment request to {0} LINE user(s).").format(sent_count)
+
+
+@frappe.whitelist()
+def get_loyalty_balance(sales_order: str):
+    """Return available points/value for the customer of this Sales Order."""
+    if not sales_order:
+        frappe.throw(_("Sales Order is required"))
+    so = frappe.get_doc("Sales Order", sales_order)
+    settings = get_settings()
+    lp_details = _get_loyalty_details(so.customer, settings)
+    points = lp_details.get("loyalty_points", 0) or 0
+    value_per_point = lp_details.get("conversion_factor", 0) or 0
+    max_amount = points * value_per_point
+    return {
+        "points": points,
+        "value_per_point": value_per_point,
+        "max_amount": max_amount,
+    }
+
+
+def _get_loyalty_details(customer, settings):
+    try:
+        from erpnext.accounts.doctype.loyalty_program.loyalty_program import (
+            get_loyalty_program_details_with_points,
+        )
+
+        return get_loyalty_program_details_with_points(
+            customer=customer,
+            loyalty_program=settings.loyalty_program,
+        ) or {}
+    except Exception:
+        return {}
 
 
 @frappe.whitelist()
