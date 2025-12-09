@@ -145,6 +145,13 @@
       "label": "Order Form Subtitle",
       "default": "กรอกจำนวนแล้วส่งกลับได้เลย",
       "description": "ข้อความบรรทัดรองในฟอร์มสั่งออเดอร์"
+    },
+    {
+      "fieldname": "require_order_confirmation",
+      "fieldtype": "Check",
+      "label": "Require Order Confirmation",
+      "default": "1",
+      "description": "ถ้าเปิด ลูกค้าต้องพิมพ์ยืนยันก่อนสร้าง Sales Order"
     }
   ],
   "permissions": [

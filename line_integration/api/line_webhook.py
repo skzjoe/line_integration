@@ -21,6 +21,8 @@ DEFAULT_ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} �
 DEFAULT_ORDER_REPLY = "แจ้งรายการสั่งซื้อหรือพิมพ์ชื่อเมนูที่ต้องการได้เลยค่ะ"
 DEFAULT_LOYALTY_PROGRAM = "Wellie Point"
 PHONE_REGEX = re.compile(r"^\d{10}$")
+CONFIRM_KEYWORDS = {"confirm", "ยืนยัน", "ตกลง"}
+CANCEL_KEYWORDS = {"cancel", "ยกเลิก"}
 QTY_PATTERN = re.compile(
     r"^[\-\u2022\u2013\u2014]?\s*(?P<name>.+?)\s*จำนวน[:：]?\s*(?P<qty>[0-9]+(?:\.[0-9]+)?)\s*$",
     re.IGNORECASE,
@@ -121,6 +123,25 @@ def handle_event(event, settings):
             lower = text.lower()
             normalized = "".join(lower.split())
 
+            # Pending order confirmation flow
+            pending_order = get_order_state(user_id)
+            if pending_order:
+                if normalized in CONFIRM_KEYWORDS:
+                    handled = finalize_order_from_state(profile_doc, pending_order, event.get("replyToken"), settings)
+                    if handled:
+                        clear_order_state(user_id)
+                        return
+                if normalized in CANCEL_KEYWORDS:
+                    clear_order_state(user_id)
+                    reply_message(event.get("replyToken"), "ยกเลิกออเดอร์เรียบร้อยค่ะ")
+                    return
+                # If other text while pending, remind
+                reply_message(
+                    event.get("replyToken"),
+                    "กรุณาพิมพ์ \"ยืนยัน\" เพื่อยืนยันออเดอร์ หรือ \"ยกเลิก\" หากต้องการแก้ไขค่ะ",
+                )
+                return
+
             register_keywords = collect_keywords(settings, "register", ["register", "สมัครสมาชิก", "สมาชิก"])
             points_keywords = collect_keywords(settings, "points", ["ตรวจสอบpointคงเหลือ"])
             menu_keywords = collect_keywords(settings, "menu", ["เมนู"])
@@ -152,7 +173,10 @@ def handle_event(event, settings):
             has_qty_lines = any(QTY_PATTERN.search((ln or "").strip()) for ln in (text or "").splitlines())
 
             if has_order_kw and has_qty_lines:
-                handled = process_order_submission(profile_doc, text, event.get("replyToken"), settings)
+                if settings.require_order_confirmation:
+                    handled = review_order_submission(profile_doc, text, event.get("replyToken"), settings, user_id)
+                else:
+                    handled = process_order_submission(profile_doc, text, event.get("replyToken"), settings)
                 if handled:
                     return
 
@@ -413,10 +437,10 @@ def reply_order_form(reply_token, settings):
         reply_message(reply_token, "ขออภัย ไม่สามารถส่งฟอร์มสั่งออเดอร์ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")
 
 
-def process_order_submission(profile_doc, text, reply_token, settings):
-    """Parse order text and create Sales Order when enabled."""
+def review_order_submission(profile_doc, text, reply_token, settings, user_id):
+    """Parse order text and ask for confirmation before creating Sales Order."""
     logger = frappe.logger("line_webhook")
-    if not settings.auto_create_sales_order:
+    if not settings.auto_create_sales_order or not settings.require_order_confirmation:
         return False
     if not profile_doc.customer:
         register_kw = first_keyword(
@@ -430,43 +454,9 @@ def process_order_submission(profile_doc, text, reply_token, settings):
         return True
 
     menu_items = fetch_menu_items(limit=200)
-    item_map = {}
-    for item in menu_items:
-        key = normalize_key(item.item_name or item.name)
-        item_map[key] = item
+    item_map = {normalize_key(item.item_name or item.name): item for item in menu_items}
 
-    lines = (text or "").splitlines()
-    orders = []
-    unknown = []
-    note = ""
-    for raw_line in lines:
-        line = raw_line.strip()
-        if not line:
-            continue
-        if line.lower().startswith("สั่งออเดอร์"):
-            continue
-        if line.lower().startswith("หมายเหตุ"):
-            note = line.split(":", 1)[1].strip() if ":" in line else line.replace("หมายเหตุ", "", 1).strip()
-            continue
-        match = QTY_PATTERN.match(line)
-        if not match:
-            continue
-        name = match.group("name").strip()
-        qty = float(match.group("qty") or 0)
-        if qty <= 0:
-            continue
-        key = normalize_key(name)
-        item = item_map.get(key)
-        if not item:
-            # try partial match
-            for k, candidate in item_map.items():
-                if key in k or k in key:
-                    item = candidate
-                    break
-        if item:
-            orders.append({"item": item, "qty": qty, "line": line})
-        else:
-            unknown.append(name)
+    orders, unknown, note = parse_orders_from_text(text, item_map)
 
     if not orders:
         reply_message(
@@ -481,6 +471,43 @@ def process_order_submission(profile_doc, text, reply_token, settings):
         )
         return True
 
+    save_order_state(
+        user_id,
+        {
+            "customer": profile_doc.customer,
+            "orders": [{"item_code": o["item"].name, "title": o["title"], "qty": o["qty"]} for o in orders],
+            "note": note,
+        },
+    )
+
+    lines = ["สรุปออเดอร์", f"ลูกค้า: {profile_doc.customer}"]
+    for o in orders:
+        lines.append(f"- {o['title']} จำนวน: {o['qty']}")
+    if note:
+        lines.append(f"หมายเหตุ: {note}")
+    lines.append('พิมพ์ "ยืนยัน" เพื่อสร้างออเดอร์ หรือ "ยกเลิก" หากต้องการแก้ไข')
+    reply_message(reply_token, "\n".join(lines))
+    return True
+
+
+def finalize_order_from_state(profile_doc, state, reply_token, settings):
+    """Create Sales Order from cached state after user confirms."""
+    logger = frappe.logger("line_webhook")
+    if not state or not state.get("orders"):
+        reply_message(
+            reply_token,
+            "ไม่พบออเดอร์ที่รอยืนยัน กรุณาพิมพ์ \"สั่งออเดอร์\" เพื่อเริ่มใหม่ค่ะ",
+        )
+        return True
+    if not settings.auto_create_sales_order or not settings.require_order_confirmation:
+        reply_message(reply_token, "ระบบไม่ได้เปิดสร้าง Sales Order อัตโนมัติค่ะ")
+        return True
+    if not profile_doc.customer:
+        reply_message(reply_token, "ยังไม่พบข้อมูลสมาชิก กรุณาลงทะเบียนก่อนนะคะ")
+        return True
+
+    orders = state.get("orders") or []
+    note = state.get("note") or ""
     try:
         weekday = now_datetime().weekday()  # Monday=0, Saturday=5
         days_until_sat = (5 - weekday + 7) % 7  # 0..6
@@ -495,10 +522,10 @@ def process_order_submission(profile_doc, text, reply_token, settings):
                 "remarks": note,
                 "items": [
                     {
-                        "item_code": item_data["item"].name,
-                        "qty": item_data["qty"],
+                        "item_code": row["item_code"],
+                        "qty": row["qty"],
                     }
-                    for item_data in orders
+                    for row in orders
                 ],
             }
         )
@@ -630,6 +657,40 @@ def first_keyword(raw_text, default):
 
 def normalize_key(val):
     return "".join((val or "").lower().split())
+
+
+def parse_orders_from_text(text, item_map):
+    orders = []
+    unknown = []
+    note = ""
+    for raw_line in (text or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.lower().startswith("สั่งออเดอร์"):
+            continue
+        if line.lower().startswith("หมายเหตุ"):
+            note = line.split(":", 1)[1].strip() if ":" in line else line.replace("หมายเหตุ", "", 1).strip()
+            continue
+        match = QTY_PATTERN.match(line)
+        if not match:
+            continue
+        name = match.group("name").strip()
+        qty = float(match.group("qty") or 0)
+        if qty <= 0:
+            continue
+        key = normalize_key(name)
+        item = item_map.get(key)
+        if not item:
+            for k, candidate in item_map.items():
+                if key in k or k in key:
+                    item = candidate
+                    break
+        if item:
+            orders.append({"item": item, "qty": qty, "line": line, "title": item.item_name or item.name})
+        else:
+            unknown.append(name)
+    return orders, unknown, note
 
 
 def resolve_public_image_url(path, logger=None):
@@ -870,6 +931,22 @@ def save_state(user_id, state):
 
 def clear_state(user_id):
     frappe.cache().delete_value(cache_key(user_id))
+
+
+def order_cache_key(user_id):
+    return f"line_order_pending:{user_id}"
+
+
+def get_order_state(user_id):
+    return frappe.cache().get_value(order_cache_key(user_id)) or {}
+
+
+def save_order_state(user_id, state):
+    frappe.cache().set_value(order_cache_key(user_id), state, expires_in_sec=900)
+
+
+def clear_order_state(user_id):
+    frappe.cache().delete_value(order_cache_key(user_id))
 
 
 @frappe.whitelist(allow_guest=True)
