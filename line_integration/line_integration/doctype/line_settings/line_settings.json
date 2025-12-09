@@ -182,6 +182,36 @@
       "fieldtype": "Currency",
       "label": "Discount Price",
       "default": 69
+    },
+    {
+      "fieldname": "section_quick_pay",
+      "fieldtype": "Section Break",
+      "label": "Quick Pay (Sales Order)"
+    },
+    {
+      "fieldname": "quick_pay_mode_of_payment",
+      "fieldtype": "Link",
+      "label": "Quick Pay Mode of Payment",
+      "options": "Mode of Payment",
+      "description": "ใช้สำหรับปุ่ม Quick Pay ที่สร้าง Sales Invoice + Payment Entry อัตโนมัติ"
+    },
+    {
+      "fieldname": "section_request_pay",
+      "fieldtype": "Section Break",
+      "label": "Request Payment"
+    },
+    {
+      "fieldname": "request_payment_message",
+      "fieldtype": "Data",
+      "label": "Request Payment Message",
+      "default": "กรุณาชำระเงินตามยอดที่แจ้งและส่งสลิปยืนยันค่ะ",
+      "description": "ข้อความที่ส่งให้ลูกค้าพร้อม QR Code"
+    },
+    {
+      "fieldname": "request_payment_qr",
+      "fieldtype": "Attach Image",
+      "label": "Request Payment QR Code",
+      "description": "รูป QR สำหรับลูกค้าสแกนจ่าย"
     }
   ],
   "permissions": [
