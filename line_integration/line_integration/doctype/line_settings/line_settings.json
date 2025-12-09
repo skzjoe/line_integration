@@ -126,6 +126,25 @@
       "label": "Loyalty Program",
       "options": "Loyalty Program",
       "default": "Wellie Point"
+    },
+    {
+      "fieldname": "section_order",
+      "fieldtype": "Section Break",
+      "label": "Order Automation"
+    },
+    {
+      "fieldname": "auto_create_sales_order",
+      "fieldtype": "Check",
+      "label": "Auto Create Sales Order",
+      "default": "0",
+      "description": "สร้าง Sales Order อัตโนมัติจากข้อความสั่งออเดอร์ที่ลูกค้าส่งกลับ"
+    },
+    {
+      "fieldname": "order_form_subtitle",
+      "fieldtype": "Data",
+      "label": "Order Form Subtitle",
+      "default": "กรอกจำนวนแล้วส่งกลับได้เลย",
+      "description": "ข้อความบรรทัดรองในฟอร์มสั่งออเดอร์"
     }
   ],
   "permissions": [

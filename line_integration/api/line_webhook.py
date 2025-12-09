@@ -6,7 +6,7 @@ import re
 # import urllib.parse
 
 import frappe
-from frappe.utils import get_url, now_datetime, today
+from frappe.utils import fmt_money, get_url, now_datetime, today
 
 from line_integration.utils.line_client import (
     ensure_profile,
@@ -139,6 +139,14 @@ def handle_event(event, settings):
                 "order_keywords": order_keywords,
             }
             logger.info(keyword_log)
+
+            first_line = (text.splitlines()[0] if text else "").strip()
+            first_line_norm = "".join(first_line.lower().split())
+
+            if first_line_norm in order_keywords["normalized"]:
+                handled = process_order_submission(profile_doc, text, event.get("replyToken"), settings)
+                if handled:
+                    return
 
             if normalized in points_keywords["normalized"]:
                 reply_points(profile_doc, event.get("replyToken"))
@@ -278,6 +286,7 @@ def reply_menu(reply_token, settings):
                     summary_image_url,
                     title="เมนูวันนี้",
                     subtitle="เลือกดูเมนูหรือคัดลอกฟอร์มสั่งออเดอร์แล้วส่งกลับได้เลยค่ะ",
+                    aspect_ratio="1:1",
                 )
             )
 
@@ -365,13 +374,14 @@ def reply_order_form(reply_token, settings):
                     "wrap": True,
                     "margin": "md",
                 }
-            )
+                )
 
         flex_msg = build_summary_bubble(
             summary_image_url,
             title="ฟอร์มสั่งออเดอร์",
-            subtitle="กรอกจำนวนแล้วส่งกลับได้เลย",
+            subtitle=settings.order_form_subtitle or "กรอกจำนวนแล้วส่งกลับได้เลย",
             body_contents=body_contents,
+            aspect_ratio="1:1",
         )
         flex_msg = {"type": "flex", "altText": "ฟอร์มสั่งออเดอร์", "contents": flex_msg}
 
@@ -393,6 +403,110 @@ def reply_order_form(reply_token, settings):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Order Form Error")
         reply_message(reply_token, "ขออภัย ไม่สามารถส่งฟอร์มสั่งออเดอร์ได้ในขณะนี้ กรุณาลองใหม่อีกครั้งค่ะ")
+
+
+def process_order_submission(profile_doc, text, reply_token, settings):
+    """Parse order text and create Sales Order when enabled."""
+    logger = frappe.logger("line_webhook")
+    if not settings.auto_create_sales_order:
+        return False
+    if not profile_doc.customer:
+        register_kw = first_keyword(
+            collect_keywords(settings, "register", ["สมัครสมาชิก"])["raw"],
+            default="สมัครสมาชิก",
+        )
+        reply_message(
+            reply_token,
+            f"ยังไม่พบข้อมูลสมาชิก กรุณาพิมพ์ {register_kw} เพื่อลงทะเบียนก่อนส่งออเดอร์นะคะ",
+        )
+        return True
+
+    menu_items = fetch_menu_items(limit=200)
+    item_map = {}
+    for item in menu_items:
+        key = normalize_key(item.item_name or item.name)
+        item_map[key] = item
+
+    lines = (text or "").splitlines()
+    orders = []
+    unknown = []
+    note = ""
+    qty_pattern = re.compile(r"^[\-\u2022]?\s*(?P<name>.+?)\s*จำนวน[:：]?\s*(?P<qty>[0-9]+(?:\.[0-9]+)?)", re.IGNORECASE)
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.lower().startswith("สั่งออเดอร์"):
+            continue
+        if line.lower().startswith("หมายเหตุ"):
+            note = line.split(":", 1)[1].strip() if ":" in line else line.replace("หมายเหตุ", "", 1).strip()
+            continue
+        match = qty_pattern.match(line)
+        if not match:
+            continue
+        name = match.group("name").strip()
+        qty = float(match.group("qty") or 0)
+        if qty <= 0:
+            continue
+        key = normalize_key(name)
+        item = item_map.get(key)
+        if not item:
+            # try partial match
+            for k, candidate in item_map.items():
+                if key in k or k in key:
+                    item = candidate
+                    break
+        if item:
+            orders.append({"item": item, "qty": qty, "line": line})
+        else:
+            unknown.append(name)
+
+    if not orders:
+        reply_message(
+            reply_token,
+            "ยังไม่พบจำนวนในข้อความที่ส่งมา กรุณาคัดลอกฟอร์มจากปุ่มสั่งออเดอร์ แล้วเติมจำนวนก่อนส่งอีกครั้งนะคะ",
+        )
+        return True
+    if unknown:
+        reply_message(
+            reply_token,
+            "พบเมนูที่ไม่รู้จัก: " + ", ".join(unknown) + "\nกรุณาตรวจสอบชื่อเมนูตามรายการในฟอร์มแล้วส่งอีกครั้งค่ะ",
+        )
+        return True
+
+    try:
+        so = frappe.get_doc(
+            {
+                "doctype": "Sales Order",
+                "customer": profile_doc.customer,
+                "transaction_date": today(),
+                "ignore_pricing_rule": 1,
+                "remarks": note,
+                "items": [
+                    {
+                        "item_code": item_data["item"].name,
+                        "qty": item_data["qty"],
+                    }
+                    for item_data in orders
+                ],
+            }
+        )
+        so.insert(ignore_permissions=True)
+        so.submit()
+
+        total_text = fmt_money(so.grand_total, currency=so.currency)
+        reply_message(
+            reply_token,
+            f"รับออเดอร์แล้ว สร้าง Sales Order {so.name} จำนวน {len(orders)} รายการ ยอดรวม {total_text}",
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "LINE Order Auto-create Error")
+        reply_message(
+            reply_token,
+            "ขออภัย ระบบยังไม่สามารถสร้าง Sales Order ได้ กรุณาลองใหม่หรือให้แอดมินช่วยดำเนินการค่ะ",
+        )
+    return True
 
 
 def reply_registered_flex(profile_doc, reply_token, settings):
@@ -504,6 +618,10 @@ def first_keyword(raw_text, default):
     return default
 
 
+def normalize_key(val):
+    return "".join((val or "").lower().split())
+
+
 def resolve_public_image_url(path, logger=None):
     """Return absolute URL only if the image is public; otherwise return None."""
     if not path:
@@ -542,7 +660,7 @@ def fetch_menu_items(limit=10, order_by="item_name asc"):
     )
 
 
-def build_summary_bubble(image_url, title, subtitle, body_contents=None):
+def build_summary_bubble(image_url, title, subtitle, body_contents=None, aspect_ratio="1:1"):
     contents = body_contents or []
     bubble = {
         "type": "bubble",
@@ -558,7 +676,7 @@ def build_summary_bubble(image_url, title, subtitle, body_contents=None):
             "type": "image",
             "url": image_url,
             "size": "full",
-            "aspectRatio": "20:13",
+            "aspectRatio": aspect_ratio,
             "aspectMode": "cover",
             "action": {"type": "uri", "label": "ดูภาพ", "uri": image_url},
         }
