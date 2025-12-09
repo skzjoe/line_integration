@@ -3,6 +3,9 @@ frappe.ui.form.on("Sales Order", {
 		if (frm.doc.docstatus !== 1 || frm.doc.status === "Closed") {
 			return;
 		}
+		// Standalone quick copy button
+		frm.add_custom_button(__("Copy Order Text"), () => copyOrderText(frm));
+
 		frm.add_custom_button(
 			__("Quick Pay"),
 			() => quickPay(frm),
@@ -14,8 +17,8 @@ frappe.ui.form.on("Sales Order", {
 			__("Line Integration")
 		);
 		frm.add_custom_button(
-			__("Copy Order Text"),
-			() => copyOrderText(frm),
+			__("Notify Customer (LINE)"),
+			() => notifyCustomer(frm),
 			__("Line Integration")
 		);
 		frm.add_custom_button(
@@ -151,6 +154,21 @@ function submitRequestPayment(frm, points_to_redeem) {
 		if (r.message) {
 			frappe.msgprint({
 				title: __("Request Payment"),
+				indicator: "green",
+				message: r.message,
+			});
+		}
+	});
+}
+
+function notifyCustomer(frm) {
+	frappe.call({
+		method: "line_integration.api.quick_pay.notify_sales_order",
+		args: { sales_order: frm.doc.name },
+	}).then((r) => {
+		if (r.message) {
+			frappe.msgprint({
+				title: __("Notify Customer"),
 				indicator: "green",
 				message: r.message,
 			});

@@ -262,6 +262,43 @@ def get_pending_order_items():
 
 
 @frappe.whitelist()
+def notify_sales_order(sales_order: str):
+    """Push order summary to LINE customer."""
+    if not sales_order:
+        frappe.throw(_("Sales Order is required"))
+    so = frappe.get_doc("Sales Order", sales_order)
+    if so.docstatus != 1:
+        frappe.throw(_("Sales Order must be submitted"))
+
+    profiles = frappe.get_all(
+        "LINE Profile",
+        filters={"customer": so.customer, "status": "Active"},
+        fields=["line_user_id"],
+    )
+    if not profiles:
+        return _("No LINE Profile linked to Customer; nothing sent.")
+
+    total_qty = sum((row.qty or 0) for row in (so.items or []))
+    lines = [
+        f"รับออเดอร์แล้ว {so.name}",
+        f"จำนวน {len(so.items)} รายการ",
+    ]
+    for row in so.items or []:
+        lines.append(f"{row.item_name or row.item_code} : {format_qty(row.qty)} ขวด")
+    lines.append(f"ทั้งหมด {format_qty(total_qty)} ขวด")
+    lines.append(f"ยอดรวม {frappe.utils.fmt_money(so.grand_total, currency=so.currency)}")
+    lines.append("ขอบคุณที่อุดหนุนนะคะ")
+    text = "\n".join(lines)
+
+    sent = 0
+    for p in profiles:
+        if push_message(p.line_user_id, text):
+            sent += 1
+
+    return _("Sent to {0} LINE user(s).").format(sent)
+
+
+@frappe.whitelist()
 def print_bag_label(sales_order: str):
     """Render a simple printable label for the sales order."""
     if not sales_order:
