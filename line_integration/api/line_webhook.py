@@ -239,7 +239,7 @@ def link_customer(profile_doc, phone_number, reply_token):
             already_registered_msg.format(name=customer_name),
         )
     else:
-        reply_message(reply_token, "Customer not found. Please contact support.")
+        reply_message(reply_token, "ไม่พบข้อมูลสมาชิกที่ใช้หมายเลขนี้ค่ะ กรุณาติดต่อแอดมิน")
 
 
 def reply_points(profile_doc, reply_token):
@@ -250,7 +250,7 @@ def reply_points(profile_doc, reply_token):
         )
         reply_message(
             reply_token,
-            f"ยังไม่มีข้อมูลสมาชิก กรุณาพิมพ์ {register_kw} เพื่อเริ่มลงทะเบียนค่ะ",
+            f"ยังไม่มีข้อมูลสมาชิก กรุณาพิมพ์ '{register_kw}' เพื่อเริ่มลงทะเบียนค่ะ",
         )
         return
 
