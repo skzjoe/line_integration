@@ -163,10 +163,40 @@ def ensure_profile(user_id, event=None):
         doc.status = "Active"
 
     source = (event or {}).get("source") or {}
-    doc.display_name = source.get("displayName") or doc.display_name
-    doc.picture_url = source.get("pictureUrl") or doc.picture_url
+    display_name = source.get("displayName")
+    picture_url = source.get("pictureUrl")
+
+    # If display_name not provided in event, fetch from LINE profile API
+    if not display_name:
+        try:
+            profile = fetch_line_profile(user_id)
+            display_name = profile.get("displayName") or display_name
+            picture_url = profile.get("pictureUrl") or picture_url
+        except Exception:
+            pass
+
+    doc.display_name = display_name or doc.display_name
+    doc.picture_url = picture_url or doc.picture_url
     doc.last_seen = now_datetime()
     if event:
         doc.last_event = json.dumps(event)
     doc.save(ignore_permissions=True)
     return doc
+
+
+def fetch_line_profile(user_id):
+    """Fetch LINE profile data for a given user_id."""
+    if not user_id:
+        return {}
+    settings = get_settings()
+    access_token = get_decrypted_password("LINE Settings", "LINE Settings", "channel_access_token") or ""
+    if not access_token:
+        return {}
+    url = f"https://api.line.me/v2/bot/profile/{user_id}"
+    resp = requests.get(url, headers=_headers(access_token), timeout=10)
+    if resp.status_code != 200:
+        return {}
+    try:
+        return resp.json() or {}
+    except Exception:
+        return {}

@@ -151,10 +151,10 @@ def request_payment(sales_order: str):
     for row in so.items or []:
         lines.append(f"{row.item_name or row.item_code} {format_qty(row.qty)} ขวด")
     lines.append(f"รวม {format_qty(total_qty)} ขวด")
-    lines.append(f"ยอดเต็ม {total_text}")
+    lines.append(f"ยอด {total_text} บาทค่า")
     if redeem_amount:
         lines.append(f"ใช้แต้ม {format_qty(points_to_redeem)} (มูลค่า {frappe.utils.fmt_money(redeem_amount, currency=so.currency)})")
-        lines.append(f"ยอดสุทธิ {frappe.utils.fmt_money(net_total, currency=so.currency)}")
+        lines.append(f"ยอดสุทธิ {frappe.utils.fmt_money(net_total, currency=so.currency)} บาทค่า")
     text = "\n".join(lines)
 
     if not qr_url:
