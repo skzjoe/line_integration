@@ -282,9 +282,10 @@ def reply_points(profile_doc, reply_token):
             loyalty_program=loyalty_program,
         )
         points = (lp_details or {}).get("loyalty_points", 0) or 0
+        points_text = format_qty(points)
         reply_message(
             reply_token,
-            f"คุณ {display_name} มี {loyalty_program} คงเหลือ {points} แต้ม",
+            f"คุณ {display_name} มี {loyalty_program} คงเหลือ {points_text} แต้ม",
         )
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Points Check Error")
@@ -528,10 +529,13 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings):
 
         total_qty = sum(row.get("qty", 0) for row in orders)
         total_text = fmt_money(so.grand_total, currency=so.currency)
-        lines = [f"รับออเดอร์แล้ว จำนวน {len(orders)} รายการ"]
+        lines = [
+            f"รับออเดอร์แล้ว {so.name}",
+            f"จำนวน {len(orders)} รายการ",
+        ]
         for row in orders:
-            lines.append(f"{row['title']} : {row['qty']} ขวด")
-        lines.append(f"ทั้งหมด {total_qty} ขวด")
+            lines.append(f"{row['title']} : {format_qty(row['qty'])} ขวด")
+        lines.append(f"ทั้งหมด {format_qty(total_qty)} ขวด")
         lines.append(f"ยอดรวม {total_text}")
         lines.append("ขอบคุณที่อุดหนุนนะคะ")
         reply_message(reply_token, "\n".join(lines))
@@ -655,6 +659,15 @@ def first_keyword(raw_text, default):
 
 def normalize_key(val):
     return "".join((val or "").lower().split())
+
+
+def format_qty(val):
+    try:
+        if float(val).is_integer():
+            return str(int(val))
+    except Exception:
+        pass
+    return str(val)
 
 
 def parse_orders_from_text(text, item_map):

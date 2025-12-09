@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 
 from line_integration.utils.line_client import get_settings, push_message
-from line_integration.api.line_webhook import resolve_public_image_url
+from line_integration.api.line_webhook import resolve_public_image_url, format_qty
 
 
 @frappe.whitelist()
@@ -72,8 +72,9 @@ def request_payment(sales_order: str):
         f"หมายเลขออเดอร์ : {so.name}",
     ]
     for row in so.items or []:
-        lines.append(f"{row.item_name or row.item_code} {row.qty} ขวด")
-    lines.append(f"รวม {total_text}")
+        lines.append(f"{row.item_name or row.item_code} {format_qty(row.qty)} ขวด")
+    lines.append(f"รวม {format_qty(total_qty)} ขวด")
+    lines.append(f"ยอดรวม {total_text}")
     text = "\n".join(lines)
 
     if not qr_url:
