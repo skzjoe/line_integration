@@ -594,7 +594,7 @@ def finalize_order_submission(profile_doc, text, reply_token, settings):
             reply_token,
             "พบจำนวนไม่ถูกต้องในบรรทัดต่อไปนี้:\n- "
             + "\n- ".join(invalid_qty)
-            + "\nกรุณาใส่จำนวนเป็นตัวเลขมากกว่า 0 แล้วส่งอีกครั้งค่ะ",
+            + "\nกรุณาใส่จำนวนให้ถูกต้อง แล้วส่งอีกครั้งค่ะ",
         )
         return True
     if unknown:
