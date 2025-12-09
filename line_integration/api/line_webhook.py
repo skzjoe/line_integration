@@ -320,9 +320,9 @@ def reply_order_form(reply_token, settings):
     try:
         items = fetch_menu_items(limit=20)
         template_lines = ["สั่งออเดอร์"]
-        for idx, item in enumerate(items or [], start=1):
+        for item in items or []:
             title = item.item_name or item.name
-            template_lines.append(f"{idx}) {title} จำนวน: ")
+            template_lines.append(f"- {title} จำนวน: ")
         template_lines.append("หมายเหตุ: ")
         template_text = "\n".join(template_lines)
 
@@ -344,11 +344,11 @@ def reply_order_form(reply_token, settings):
                     "margin": "md",
                 }
             )
-            for idx, item in enumerate(items, start=1):
+            for item in items:
                 body_contents.append(
                     {
                         "type": "text",
-                        "text": f"{idx}) {item.item_name or item.name}",
+                        "text": f"- {item.item_name or item.name}",
                         "size": "sm",
                         "color": "#444444",
                         "wrap": True,
@@ -532,11 +532,12 @@ def resolve_public_image_url(path, logger=None):
         return None
 
 
-def fetch_menu_items(limit=10):
+def fetch_menu_items(limit=10, order_by="item_name asc"):
     return frappe.get_all(
         "Item",
         filters={"custom_add_in_line_menu": 1},
         fields=["name", "item_name", "description", "custom_line_menu_image"],
+        order_by=order_by,
         limit=limit,
     )
 
