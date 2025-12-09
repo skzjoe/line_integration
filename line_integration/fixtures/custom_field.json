@@ -21,6 +21,7 @@
   },
   {
     "doctype": "Custom Field",
+    "name": "line_order_note",
     "dt": "Sales Order",
     "fieldname": "line_order_note",
     "label": "LINE Order Note",
