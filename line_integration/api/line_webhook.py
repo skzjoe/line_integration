@@ -520,13 +520,7 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings):
                 "delivery_date": add_days(today(), days_until_sat),
                 "ignore_pricing_rule": 1,
                 "remarks": note,
-                "items": [
-                    {
-                        "item_code": row["item_code"],
-                        "qty": row["qty"],
-                    }
-                    for row in orders
-                ],
+                "items": build_so_items(orders, settings),
             }
         )
         so.insert(ignore_permissions=True)
@@ -812,6 +806,29 @@ def build_item_bubble(item, logger=None):
             "action": {"type": "uri", "label": "ดูภาพ", "uri": image_url},
         }
     return bubble
+
+
+def build_so_items(orders, settings):
+    """Construct SO items with optional manual quantity discount."""
+    items = []
+    threshold = int(settings.qty_discount_threshold or 0)
+    regular_price = float(settings.qty_price_regular or 0)
+    discount_price = float(settings.qty_price_discount or 0)
+    apply_discount = (
+        bool(getattr(settings, "enable_qty_discount", False))
+        and threshold > 0
+        and discount_price > 0
+    )
+    for row in orders:
+        qty = row.get("qty") or 0
+        item_row = {"item_code": row.get("item_code"), "qty": qty}
+        if apply_discount:
+            if qty >= threshold and discount_price > 0:
+                item_row["rate"] = discount_price
+            elif regular_price > 0:
+                item_row["rate"] = regular_price
+        items.append(item_row)
+    return items
 
 
 def register_customer(profile_doc, full_name, phone_number, reply_token):

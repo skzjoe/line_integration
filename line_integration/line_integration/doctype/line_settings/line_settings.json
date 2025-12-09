@@ -152,6 +152,36 @@
       "label": "Require Order Confirmation",
       "default": "1",
       "description": "ถ้าเปิด ลูกค้าต้องพิมพ์ยืนยันก่อนสร้าง Sales Order"
+    },
+    {
+      "fieldname": "section_pricing",
+      "fieldtype": "Section Break",
+      "label": "Pricing Override"
+    },
+    {
+      "fieldname": "enable_qty_discount",
+      "fieldtype": "Check",
+      "label": "Enable Quantity Discount",
+      "default": "0",
+      "description": "ลดราคาต่อขวดเมื่อซื้อถึงจำนวนขั้นต่ำ (ใช้แทน Pricing Rule ชั่วคราว)"
+    },
+    {
+      "fieldname": "qty_discount_threshold",
+      "fieldtype": "Int",
+      "label": "Qty Threshold",
+      "default": 5
+    },
+    {
+      "fieldname": "qty_price_regular",
+      "fieldtype": "Currency",
+      "label": "Regular Price",
+      "default": 75
+    },
+    {
+      "fieldname": "qty_price_discount",
+      "fieldtype": "Currency",
+      "label": "Discount Price",
+      "default": 69
     }
   ],
   "permissions": [
