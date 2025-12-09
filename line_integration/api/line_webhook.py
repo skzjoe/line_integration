@@ -15,7 +15,9 @@ from line_integration.utils.line_client import (
 )
 
 # Fallback defaults; settings fields override these at runtime
-DEFAULT_REGISTER_PROMPT = "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งชื่อที่ต้องการใช้งานมาให้เราค่ะ"
+DEFAULT_REGISTER_PROMPT = (
+    "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
+)
 DEFAULT_ASK_PHONE_PROMPT = "ขอบคุณค่า! ตอนนี้กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) มาให้เราค่ะ"
 DEFAULT_ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
 DEFAULT_ORDER_REPLY = "แจ้งรายการสั่งซื้อหรือพิมพ์ชื่อเมนูที่ต้องการได้เลยค่ะ"
@@ -151,8 +153,16 @@ def handle_event(event, settings):
             points_keywords = collect_keywords(settings, "points", ["ตรวจสอบpointคงเหลือ"])
             menu_keywords = collect_keywords(settings, "menu", ["เมนู"])
             order_keywords = collect_keywords(settings, "order", [settings.order_keyword or "สั่งออเดอร์"])
-            register_prompt = settings.register_prompt or DEFAULT_REGISTER_PROMPT
-            ask_phone_prompt = settings.ask_phone_prompt or DEFAULT_ASK_PHONE_PROMPT
+            register_prompt = (
+                settings.register_prompt
+                or settings.ask_phone_prompt
+                or DEFAULT_REGISTER_PROMPT
+            )
+            ask_phone_prompt = (
+                settings.ask_phone_prompt
+                or settings.register_prompt
+                or DEFAULT_ASK_PHONE_PROMPT
+            )
             already_registered_msg = (
                 settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
             )
@@ -195,27 +205,39 @@ def handle_event(event, settings):
                 reply_order_form(event.get("replyToken"), settings)
                 return
             if state and state.get("stage") == "awaiting_name":
-                save_state(user_id, {"stage": "awaiting_phone", "name": text})
+                save_state(
+                    user_id,
+                    {
+                        "stage": "awaiting_phone",
+                        "name": (profile_doc.display_name or "").strip(),
+                    },
+                )
                 reply_message(event.get("replyToken"), ask_phone_prompt)
                 return
             if state and state.get("stage") == "awaiting_phone":
                 if PHONE_REGEX.match(text):
                     register_customer(
-                        profile_doc, state.get("name", "").strip(), text, event.get("replyToken")
+                        profile_doc,
+                        (state.get("name") or profile_doc.display_name or "").strip(),
+                        text,
+                        event.get("replyToken"),
                     )
                     clear_state(user_id)
                 else:
-                    reply_message(
-                        event.get("replyToken"),
-                        "กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ).",
-                    )
+                    reply_message(event.get("replyToken"), ask_phone_prompt)
                 return
             if normalized in register_keywords["normalized"]:
                 if profile_doc.customer:
                     reply_registered_flex(profile_doc, event.get("replyToken"), settings)
                     return
                 clear_state(user_id)
-                save_state(user_id, {"stage": "awaiting_name"})
+                save_state(
+                    user_id,
+                    {
+                        "stage": "awaiting_phone",
+                        "name": (profile_doc.display_name or "").strip(),
+                    },
+                )
                 reply_message(event.get("replyToken"), register_prompt)
                 return
             if PHONE_REGEX.match(text):
@@ -959,12 +981,15 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
     already_registered_msg = (
         settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
     )
-    register_prompt = settings.register_prompt or DEFAULT_REGISTER_PROMPT
-    if not full_name:
-        reply_message(reply_token, register_prompt)
-        return
+    phone_prompt = settings.ask_phone_prompt or settings.register_prompt or DEFAULT_ASK_PHONE_PROMPT
+    resolved_name = (
+        (full_name or "").strip()
+        or (profile_doc.display_name or "").strip()
+        or profile_doc.line_user_id
+        or "LINE User"
+    )
     if not phone_number or not PHONE_REGEX.match(phone_number):
-        reply_message(reply_token, "Invalid phone number. Please send 10 digits.")
+        reply_message(reply_token, phone_prompt)
         return
 
     existing_customer = frappe.db.get_value(
@@ -999,7 +1024,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
         customer = frappe.get_doc(
             {
                 "doctype": "Customer",
-                "customer_name": full_name,
+                "customer_name": resolved_name,
                 "customer_type": "Individual",
                 "customer_group": customer_group,
                 "territory": territory,
@@ -1028,7 +1053,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             frappe.get_doc(
                 {
                     "doctype": "Contact",
-                    "first_name": full_name,
+                    "first_name": resolved_name,
                     "mobile_no": phone_number,
                     "phone": phone_number,
                     "links": [
