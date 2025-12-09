@@ -31,6 +31,24 @@ def quick_pay_sales_order(sales_order: str, points_to_redeem: float = 0):
     msg = _("Created Sales Invoice {0} and Payment Entry {1}").format(si.name, pe.name)
     if points_to_redeem:
         msg += _("<br>Redeemed points: {0}").format(points_to_redeem)
+
+    # Notify customer via LINE if points were redeemed
+    points_used = float(si.loyalty_points or 0)
+    amount_used = float(si.loyalty_amount or 0)
+    if points_used > 0:
+        profiles = frappe.get_all(
+            "LINE Profile",
+            filters={"customer": so.customer, "status": "Active"},
+            fields=["line_user_id"],
+        )
+        if profiles:
+            text = (
+                f"แจ้งยอดออเดอร์ {so.name}\n"
+                f"ใช้แต้ม {format_qty(points_used)} "
+                f"(มูลค่า {frappe.utils.fmt_money(amount_used, currency=si.currency)})"
+            )
+            for p in profiles:
+                push_message(p.line_user_id, text)
     return msg
 
 

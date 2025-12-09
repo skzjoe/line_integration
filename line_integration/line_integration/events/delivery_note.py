@@ -1,6 +1,6 @@
 import frappe
 
-from line_integration.line_integration.utils.line_client import push_message
+from line_integration.utils.line_client import push_message
 
 
 def send_line_notification(doc, method=None):
