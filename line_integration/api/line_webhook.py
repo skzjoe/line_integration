@@ -11,6 +11,7 @@ from frappe.utils import add_days, fmt_money, get_url, now_datetime, today
 from line_integration.utils.line_client import (
     ensure_profile,
     get_settings,
+    push_message,
     reply_message,
 )
 
@@ -281,7 +282,7 @@ def link_customer(profile_doc, phone_number, reply_token):
             reply_token,
             already_registered_msg.format(name=customer_name),
         )
-        resume_order_after_membership(profile_doc, reply_token, settings)
+        resume_order_after_membership(profile_doc, None, settings)
     else:
         reply_message(reply_token, "ไม่พบข้อมูลสมาชิกที่ใช้หมายเลขนี้ค่ะ กรุณาติดต่อแอดมิน")
 
@@ -552,8 +553,9 @@ def review_order_submission(profile_doc, text, reply_token, settings, user_id):
     return True
 
 
-def reply_order_confirmation(profile_doc, state, reply_token):
+def reply_order_confirmation(profile_doc, state, reply_token, send_fn=None):
     """Send order summary asking user to confirm."""
+    send_fn = send_fn or reply_message
     lines = ["สรุปออเดอร์"]
     customer_name = profile_doc.customer or state.get("customer")
     if customer_name:
@@ -564,23 +566,24 @@ def reply_order_confirmation(profile_doc, state, reply_token):
     if note:
         lines.append(f"หมายเหตุ: {note}")
     lines.append('พิมพ์ "ยืนยัน" เพื่อสร้างออเดอร์ หรือ "ยกเลิก" หากต้องการแก้ไข')
-    reply_message(reply_token, "\n".join(lines))
+    send_fn(reply_token, "\n".join(lines))
 
 
-def finalize_order_from_state(profile_doc, state, reply_token, settings):
+def finalize_order_from_state(profile_doc, state, reply_token, settings, send_fn=None):
     """Create Sales Order from cached state after user confirms."""
     logger = frappe.logger("line_webhook")
+    send_fn = send_fn or reply_message
     if not state or not state.get("orders"):
-        reply_message(
+        send_fn(
             reply_token,
             "ไม่พบออเดอร์ที่รอยืนยัน กรุณาพิมพ์ \"สั่งออเดอร์\" เพื่อเริ่มใหม่ค่ะ",
         )
         return True
     if not settings.auto_create_sales_order:
-        reply_message(reply_token, "ระบบไม่ได้เปิดสร้าง Sales Order อัตโนมัติค่ะ")
+        send_fn(reply_token, "ระบบไม่ได้เปิดสร้าง Sales Order อัตโนมัติค่ะ")
         return True
     if not profile_doc.customer:
-        reply_message(reply_token, "ยังไม่พบข้อมูลสมาชิก กรุณาลงทะเบียนก่อนนะคะ")
+        send_fn(reply_token, "ยังไม่พบข้อมูลสมาชิก กรุณาลงทะเบียนก่อนนะคะ")
         return True
 
     orders = state.get("orders") or []
@@ -611,15 +614,15 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings):
             f"จำนวน {len(orders)} รายการ",
         ]
         for row in orders:
-            lines.append(f"{row['title']} : {format_qty(row['qty'])} ขวด")
+        lines.append(f"{row['title']} : {format_qty(row['qty'])} ขวด")
         lines.append(f"ทั้งหมด {format_qty(total_qty)} ขวด")
         lines.append(f"ยอดรวม {total_text}")
         lines.append("ขอบคุณที่อุดหนุนนะคะ")
-        reply_message(reply_token, "\n".join(lines))
+        send_fn(reply_token, "\n".join(lines))
         clear_order_state(profile_doc.line_user_id)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Order Auto-create Error")
-        reply_message(
+        send_fn(
             reply_token,
             "ขออภัย ระบบยังไม่สามารถสร้าง Sales Order ได้ กรุณาลองใหม่หรือให้แอดมินช่วยดำเนินการค่ะ",
         )
@@ -641,10 +644,17 @@ def resume_order_after_membership(profile_doc, reply_token, settings):
     state.pop("needs_customer", None)
     save_order_state(user_id, state)
 
+    # Use push message if reply_token already consumed; LINE allows one reply per token
+    send_fn = (
+        reply_message
+        if reply_token
+        else (lambda _rt, msg: push_message(user_id, msg))
+    )
+
     if settings.require_order_confirmation:
-        reply_order_confirmation(profile_doc, state, reply_token)
+        reply_order_confirmation(profile_doc, state, reply_token, send_fn=send_fn)
     else:
-        finalize_order_from_state(profile_doc, state, reply_token, settings)
+        finalize_order_from_state(profile_doc, state, reply_token, settings, send_fn=send_fn)
 
 
 def finalize_order_submission(profile_doc, text, reply_token, settings, user_id):
@@ -1083,7 +1093,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
                 reply_token,
                 already_registered_msg.format(name=existing_customer),
             )
-            resume_order_after_membership(profile_doc, reply_token, settings)
+            resume_order_after_membership(profile_doc, None, settings)
             return
 
         customer_group = (
@@ -1152,7 +1162,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             reply_token,
             f"ลงทะเบียนเรียบร้อย! คุณ {customer.customer_name or customer.name} สามารถพิมพ์ \"สั่งออเดอร์\" หรือกดจากเมนูได้เลยค่ะ",
         )
-        resume_order_after_membership(profile_doc, reply_token, settings)
+        resume_order_after_membership(profile_doc, None, settings)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Registration Error")
         reply_message(
