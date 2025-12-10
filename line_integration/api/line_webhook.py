@@ -124,10 +124,30 @@ def handle_event(event, settings):
             text = (message.get("text") or "").strip()
             lower = text.lower()
             normalized = "".join(lower.split())
+            register_prompt = (
+                settings.register_prompt
+                or settings.ask_phone_prompt
+                or DEFAULT_REGISTER_PROMPT
+            )
+            ask_phone_prompt = (
+                settings.ask_phone_prompt
+                or settings.register_prompt
+                or DEFAULT_ASK_PHONE_PROMPT
+            )
 
             # Pending order confirmation flow
             pending_order = get_order_state(user_id)
             if pending_order:
+                if not profile_doc.customer:
+                    if PHONE_REGEX.match(text):
+                        # Let phone handling proceed
+                        pass
+                    else:
+                        reply_message(
+                            event.get("replyToken"),
+                            f"รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n{ask_phone_prompt}",
+                        )
+                        return
                 has_qty_lines = any(QTY_PATTERN.search((ln or "").strip()) for ln in (text or "").splitlines())
                 if has_qty_lines:
                     # Treat as new order; discard pending state and continue parsing fresh
@@ -153,16 +173,6 @@ def handle_event(event, settings):
             points_keywords = collect_keywords(settings, "points", ["ตรวจสอบpointคงเหลือ"])
             menu_keywords = collect_keywords(settings, "menu", ["เมนู"])
             order_keywords = collect_keywords(settings, "order", [settings.order_keyword or "สั่งออเดอร์"])
-            register_prompt = (
-                settings.register_prompt
-                or settings.ask_phone_prompt
-                or DEFAULT_REGISTER_PROMPT
-            )
-            ask_phone_prompt = (
-                settings.ask_phone_prompt
-                or settings.register_prompt
-                or DEFAULT_ASK_PHONE_PROMPT
-            )
             already_registered_msg = (
                 settings.already_registered_message or DEFAULT_ALREADY_REGISTERED_MSG
             )
@@ -191,7 +201,7 @@ def handle_event(event, settings):
                 if settings.require_order_confirmation:
                     handled = review_order_submission(profile_doc, text, event.get("replyToken"), settings, user_id)
                 else:
-                    handled = finalize_order_submission(profile_doc, text, event.get("replyToken"), settings)
+                    handled = finalize_order_submission(profile_doc, text, event.get("replyToken"), settings, user_id)
                 if handled:
                     return
 
@@ -265,6 +275,7 @@ def link_customer(profile_doc, phone_number, reply_token):
             reply_token,
             already_registered_msg.format(name=customer_name),
         )
+        resume_order_after_membership(profile_doc, reply_token, settings)
     else:
         reply_message(reply_token, "ไม่พบข้อมูลสมาชิกที่ใช้หมายเลขนี้ค่ะ กรุณาติดต่อแอดมิน")
 
@@ -470,16 +481,6 @@ def review_order_submission(profile_doc, text, reply_token, settings, user_id):
     logger = frappe.logger("line_webhook")
     if not settings.auto_create_sales_order or not settings.require_order_confirmation:
         return False
-    if not profile_doc.customer:
-        register_kw = first_keyword(
-            collect_keywords(settings, "register", ["สมัครสมาชิก"])["raw"],
-            default="สมัครสมาชิก",
-        )
-        reply_message(
-            reply_token,
-            f"ยังไม่พบข้อมูลสมาชิก กรุณาพิมพ์ {register_kw} เพื่อลงทะเบียนก่อนส่งออเดอร์นะคะ",
-        )
-        return True
 
     menu_items = fetch_menu_items(limit=200)
     item_map = {normalize_key(item.item_name or item.name): item for item in menu_items}
@@ -507,23 +508,57 @@ def review_order_submission(profile_doc, text, reply_token, settings, user_id):
         )
         return True
 
+    state_payload = {
+        "customer": profile_doc.customer,
+        "orders": [{"item_code": o["item"].name, "title": o["title"], "qty": o["qty"]} for o in orders],
+        "note": note,
+    }
+    if not profile_doc.customer:
+        save_order_state(
+            user_id,
+            {**state_payload, "needs_customer": True, "flow": "confirm"},
+        )
+        save_state(
+            user_id,
+            {
+                "stage": "awaiting_phone",
+                "name": (profile_doc.display_name or "").strip(),
+            },
+        )
+        phone_prompt = (
+            settings.ask_phone_prompt
+            or settings.register_prompt
+            or DEFAULT_ASK_PHONE_PROMPT
+        )
+        reply_message(
+            reply_token,
+            "รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n"
+            + phone_prompt,
+        )
+        return True
+
     save_order_state(
         user_id,
-        {
-            "customer": profile_doc.customer,
-            "orders": [{"item_code": o["item"].name, "title": o["title"], "qty": o["qty"]} for o in orders],
-            "note": note,
-        },
+        state_payload,
     )
 
-    lines = ["สรุปออเดอร์", f"ลูกค้า: {profile_doc.customer}"]
-    for o in orders:
+    reply_order_confirmation(profile_doc, state_payload, reply_token)
+    return True
+
+
+def reply_order_confirmation(profile_doc, state, reply_token):
+    """Send order summary asking user to confirm."""
+    lines = ["สรุปออเดอร์"]
+    customer_name = profile_doc.customer or state.get("customer")
+    if customer_name:
+        lines.append(f"ลูกค้า: {customer_name}")
+    for o in state.get("orders") or []:
         lines.append(f"- {o['title']} จำนวน: {format_qty(o['qty'])}")
+    note = state.get("note")
     if note:
         lines.append(f"หมายเหตุ: {note}")
     lines.append('พิมพ์ "ยืนยัน" เพื่อสร้างออเดอร์ หรือ "ยกเลิก" หากต้องการแก้ไข')
     reply_message(reply_token, "\n".join(lines))
-    return True
 
 
 def finalize_order_from_state(profile_doc, state, reply_token, settings):
@@ -575,6 +610,7 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings):
         lines.append(f"ยอดรวม {total_text}")
         lines.append("ขอบคุณที่อุดหนุนนะคะ")
         reply_message(reply_token, "\n".join(lines))
+        clear_order_state(profile_doc.line_user_id)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Order Auto-create Error")
         reply_message(
@@ -584,21 +620,32 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings):
     return True
 
 
-def finalize_order_submission(profile_doc, text, reply_token, settings):
+def resume_order_after_membership(profile_doc, reply_token, settings):
+    """Resume pending order after customer is linked/created."""
+    user_id = getattr(profile_doc, "line_user_id", None)
+    if not user_id or not profile_doc.customer:
+        return
+    state = get_order_state(user_id)
+    if not state or not state.get("orders"):
+        return
+    if not state.get("needs_customer"):
+        return
+
+    state["customer"] = profile_doc.customer
+    state.pop("needs_customer", None)
+    save_order_state(user_id, state)
+
+    if settings.require_order_confirmation:
+        reply_order_confirmation(profile_doc, state, reply_token)
+    else:
+        finalize_order_from_state(profile_doc, state, reply_token, settings)
+
+
+def finalize_order_submission(profile_doc, text, reply_token, settings, user_id):
     """Directly create Sales Order (no confirmation)."""
     logger = frappe.logger("line_webhook")
     if not settings.auto_create_sales_order:
         return False
-    if not profile_doc.customer:
-        register_kw = first_keyword(
-            collect_keywords(settings, "register", ["สมัครสมาชิก"])["raw"],
-            default="สมัครสมาชิก",
-        )
-        reply_message(
-            reply_token,
-            f"ยังไม่พบข้อมูลสมาชิก กรุณาพิมพ์ {register_kw} เพื่อลงทะเบียนก่อนส่งออเดอร์นะคะ",
-        )
-        return True
 
     menu_items = fetch_menu_items(limit=200)
     item_map = {normalize_key(item.item_name or item.name): item for item in menu_items}
@@ -626,12 +673,36 @@ def finalize_order_submission(profile_doc, text, reply_token, settings):
         )
         return True
 
-    # Build state-like dict and reuse finalize_order_from_state
     state = {
         "customer": profile_doc.customer,
         "orders": [{"item_code": o["item"].name, "title": o["title"], "qty": o["qty"]} for o in orders],
         "note": note,
     }
+    if not profile_doc.customer:
+        save_order_state(
+            user_id,
+            {**state, "needs_customer": True, "flow": "finalize"},
+        )
+        save_state(
+            user_id,
+            {
+                "stage": "awaiting_phone",
+                "name": (profile_doc.display_name or "").strip(),
+            },
+        )
+        phone_prompt = (
+            settings.ask_phone_prompt
+            or settings.register_prompt
+            or DEFAULT_ASK_PHONE_PROMPT
+        )
+        reply_message(
+            reply_token,
+            "รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n"
+            + phone_prompt,
+        )
+        return True
+
+    # Build state-like dict and reuse finalize_order_from_state
     return finalize_order_from_state(profile_doc, state, reply_token, settings)
 
 
@@ -1006,6 +1077,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
                 reply_token,
                 already_registered_msg.format(name=existing_customer),
             )
+            resume_order_after_membership(profile_doc, reply_token, settings)
             return
 
         customer_group = (
@@ -1074,6 +1146,7 @@ def register_customer(profile_doc, full_name, phone_number, reply_token):
             reply_token,
             f"ลงทะเบียนเรียบร้อย! คุณ {customer.customer_name or customer.name} สามารถพิมพ์ \"สั่งออเดอร์\" หรือกดจากเมนูได้เลยค่ะ",
         )
+        resume_order_after_membership(profile_doc, reply_token, settings)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LINE Registration Error")
         reply_message(
