@@ -140,14 +140,20 @@ def handle_event(event, settings):
             if pending_order:
                 if not profile_doc.customer:
                     if PHONE_REGEX.match(text):
-                        # Let phone handling proceed
-                        pass
-                    else:
-                        reply_message(
+                        # Capture phone to register/link, then resume pending order
+                        register_customer(
+                            profile_doc,
+                            (state.get("name") or profile_doc.display_name or "").strip(),
+                            text,
                             event.get("replyToken"),
-                            f"รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n{ask_phone_prompt}",
                         )
+                        clear_state(user_id)
                         return
+                    reply_message(
+                        event.get("replyToken"),
+                        f"รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n{ask_phone_prompt}",
+                    )
+                    return
                 has_qty_lines = any(QTY_PATTERN.search((ln or "").strip()) for ln in (text or "").splitlines())
                 if has_qty_lines:
                     # Treat as new order; discard pending state and continue parsing fresh
