@@ -154,6 +154,12 @@ def push_message(user_id, text):
 
 
 def ensure_profile(user_id, event=None):
+    def _truncate(value, max_length):
+        """Trim value to the allowed length of the LINE Profile fields."""
+        if value and max_length and len(value) > max_length:
+            return value[:max_length]
+        return value
+
     profile_name = frappe.db.get_value("LINE Profile", {"line_user_id": user_id})
     if profile_name:
         doc = frappe.get_doc("LINE Profile", profile_name)
@@ -175,8 +181,11 @@ def ensure_profile(user_id, event=None):
         except Exception:
             pass
 
-    doc.display_name = display_name or doc.display_name
-    doc.picture_url = picture_url or doc.picture_url
+    max_display_len = (doc.meta.get_field("display_name") or {}).get("length", 0)
+    max_picture_len = (doc.meta.get_field("picture_url") or {}).get("length", 0)
+
+    doc.display_name = _truncate(display_name or doc.display_name, max_display_len or None)
+    doc.picture_url = _truncate(picture_url or doc.picture_url, max_picture_len or None)
     doc.last_seen = now_datetime()
     if event:
         doc.last_event = json.dumps(event)
