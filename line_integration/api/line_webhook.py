@@ -614,7 +614,7 @@ def finalize_order_from_state(profile_doc, state, reply_token, settings, send_fn
             f"จำนวน {len(orders)} รายการ",
         ]
         for row in orders:
-        lines.append(f"{row['title']} : {format_qty(row['qty'])} ขวด")
+            lines.append(f"{row['title']} : {format_qty(row['qty'])} ขวด")
         lines.append(f"ทั้งหมด {format_qty(total_qty)} ขวด")
         lines.append(f"ยอดรวม {total_text}")
         lines.append("ขอบคุณที่อุดหนุนนะคะ")
