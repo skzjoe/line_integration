@@ -406,75 +406,35 @@ def reply_order_form(reply_token, settings):
     logger = frappe.logger("line_webhook")
     try:
         items = fetch_menu_items(limit=20)
-        template_lines = ["สั่งออเดอร์"]
+        template_lines = ["“สั่งออเดอร์”"]
         for item in items or []:
             title = item.item_name or item.name
             template_lines.append(f"- {title} จำนวน: ")
         template_lines.append("หมายเหตุ: ")
         template_text = "\n".join(template_lines)
 
-        summary_image = settings.menu_summary_image or (
-            frappe.local.conf.get("line_menu_summary_image")
-            if hasattr(frappe.local, "conf")
-            else None
+        prompt_msg = "คัดลอกข้อความนี้ แก้ไขจำนวน/หมายเหตุ แล้วส่งกลับได้เลย"
+        sent = reply_message(
+            reply_token,
+            [
+                {"type": "text", "text": prompt_msg},
+                {"type": "text", "text": template_text},
+            ],
         )
-        summary_image_url = resolve_public_image_url(summary_image, logger)
-
-        body_contents = []
-        if items:
-            body_contents.append(
-                {
-                    "type": "text",
-                    "text": "เมนู:",
-                    "weight": "bold",
-                    "size": "sm",
-                    "margin": "md",
-                }
-            )
-            for item in items:
-                body_contents.append(
-                    {
-                        "type": "text",
-                        "text": f"- {item.item_name or item.name}",
-                        "size": "sm",
-                        "color": "#444444",
-                        "wrap": True,
-                        "margin": "xs",
-                    }
-                )
-        else:
-            body_contents.append(
-                {
-                    "type": "text",
-                    "text": "ยังไม่มีเมนูในระบบ",
-                    "size": "sm",
-                    "color": "#555555",
-                    "wrap": True,
-                    "margin": "md",
-                }
-                )
-
-        flex_msg = build_summary_bubble(
-            summary_image_url,
-            title="ฟอร์มสั่งออเดอร์",
-            subtitle=settings.order_form_subtitle or "กรอกจำนวนแล้วส่งกลับได้เลย",
-            body_contents=body_contents,
-            aspect_ratio="1:1",
+        logger.info(
+            {
+                "event": "line_order_form_reply_attempt",
+                "sent": bool(sent),
+                "item_count": len(items or []),
+                "message_count": 2,
+            }
         )
-        flex_msg = {"type": "flex", "altText": "ฟอร์มสั่งออเดอร์", "contents": flex_msg}
-
-        text_msg = (
-            "คัดลอกข้อความนี้ แก้ไขจำนวน/หมายเหตุ แล้วส่งกลับได้เลย\n"
-            f"{template_text}"
-        )
-
-        sent = reply_message(reply_token, [flex_msg, {"type": "text", "text": text_msg}])
-        logger.info({"event": "line_order_form_reply_attempt", "sent": bool(sent), "item_count": len(items or [])})
         if not sent:
             frappe.log_error(
                 {
                     "event": "line_order_form_reply_failed",
                     "item_count": len(items or []),
+                    "message_count": 2,
                 },
                 "LINE Order Form Reply Failed",
             )
