@@ -17,7 +17,7 @@ from line_integration.utils.line_client import (
 
 # Fallback defaults; settings fields override these at runtime
 DEFAULT_REGISTER_PROMPT = (
-    "สวัสดีค่า! เพื่อทำการลงทะเบียน กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) เพื่อเก็บสะสมแต้มค่ะ"
+    "สวัสดีค่า! กรอกหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) เพื่อเก็บสะสมแต้มค่ะ"
 )
 DEFAULT_ASK_PHONE_PROMPT = "กรุณาส่งหมายเลขโทรศัพท์ 10 หลักของคุณ (ไม่มีขีดหรือตัวอักษรอื่นๆ) เพื่อเก็บสะสมแต้มค่ะ"
 DEFAULT_ALREADY_REGISTERED_MSG = "สวัสดีค่าคุณ {name} คุณได้ทำการสมัครสมาชิกไปเรียบร้อยแล้ว"
@@ -152,7 +152,7 @@ def handle_event(event, settings):
                         return
                     reply_message(
                         event.get("replyToken"),
-                        f"รับออเดอร์ไว้ให้แล้วค่ะ กรุณาส่งหมายเลขโทรศัพท์ 10 หลักเพื่อสมัคร/ลิงก์สมาชิกก่อนนะคะ\n{ask_phone_prompt}",
+                        f"รับออเดอร์ไว้ให้แล้วค่ะ กรอกเลขโทรศัพท์ 10 หลักเพื่อสมัครสมาชิกก่อนนะคะ\n{ask_phone_prompt}",
                     )
                     return
                 has_qty_lines = any(QTY_PATTERN.search((ln or "").strip()) for ln in (text or "").splitlines())
@@ -413,7 +413,7 @@ def reply_order_form(reply_token, settings):
         template_lines.append("หมายเหตุ: ")
         template_text = "\n".join(template_lines)
 
-        prompt_msg = "คัดลอกข้อความนี้ แก้ไขจำนวน/หมายเหตุ แล้วส่งกลับได้เลย"
+        prompt_msg = "คัดลอกข้อความด้านล่างนี้ แก้ไขจำนวน/หมายเหตุ แล้วส่งกลับได้เลย"
         sent = reply_message(
             reply_token,
             [
