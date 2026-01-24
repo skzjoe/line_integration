@@ -828,14 +828,16 @@ def eval_qty_expression(expr):
     """Safely evaluate a simple arithmetic expression for quantity."""
     import ast
     expr = (expr or "").strip()
-    tree = ast.parse(expr, mode="eval")
+    try:
+        tree = ast.parse(expr, mode="eval")
+    except Exception:
+        raise ValueError("Invalid syntax")
 
-    allowed_nodes = (
+    # Define allowed nodes dynamically to avoid AttributeError on newer/older Pythons
+    allowed = {
         ast.Expression,
         ast.BinOp,
         ast.UnaryOp,
-        ast.Num,
-        ast.Constant,
         ast.Add,
         ast.Sub,
         ast.Mult,
@@ -844,19 +846,29 @@ def eval_qty_expression(expr):
         ast.Pow,
         ast.USub,
         ast.UAdd,
-    )
+    }
+    if hasattr(ast, "Constant"):
+        allowed.add(ast.Constant)
+    if hasattr(ast, "Num"):
+        allowed.add(ast.Num)
 
     def _eval(node):
-        if not isinstance(node, allowed_nodes):
-            raise ValueError("Unsupported expression")
+        if type(node) not in allowed:
+            raise ValueError(f"Unsupported expression node: {type(node)}")
+
         if isinstance(node, ast.Expression):
             return _eval(node.body)
-        if isinstance(node, ast.Num):  # py<3.8
-            return float(node.n)
-        if isinstance(node, ast.Constant):
+
+        # Python 3.8+ uses Constant for numbers
+        if hasattr(ast, "Constant") and isinstance(node, ast.Constant):
             if isinstance(node.value, (int, float)):
                 return float(node.value)
             raise ValueError("Invalid constant")
+
+        # Python < 3.8 uses Num
+        if hasattr(ast, "Num") and isinstance(node, ast.Num):
+            return float(node.n)
+
         if isinstance(node, ast.UnaryOp):
             operand = _eval(node.operand)
             if isinstance(node.op, ast.UAdd):
@@ -864,6 +876,7 @@ def eval_qty_expression(expr):
             if isinstance(node.op, ast.USub):
                 return -operand
             raise ValueError("Unsupported unary op")
+
         if isinstance(node, ast.BinOp):
             left = _eval(node.left)
             right = _eval(node.right)
@@ -878,6 +891,7 @@ def eval_qty_expression(expr):
             if isinstance(node.op, ast.Pow):
                 return left**right
             raise ValueError("Unsupported binary op")
+        
         raise ValueError("Unsupported expression")
 
     return float(_eval(tree))
