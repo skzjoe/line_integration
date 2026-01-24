@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import re
+import unicodedata
 # import urllib.parse
 
 import frappe
@@ -123,6 +124,7 @@ def handle_event(event, settings):
         message = event.get("message") or {}
         if message.get("type") == "text":
             text = (message.get("text") or "").strip()
+            text = unicodedata.normalize("NFC", text).replace("\u0e4d\u0e32", "\u0e33")
             lower = text.lower()
             normalized = "".join(lower.split())
             register_prompt = (
@@ -967,7 +969,25 @@ def fetch_menu_items(limit=10, order_by="item_name asc"):
 
 def build_summary_bubble(image_url, title, subtitle, body_contents=None, aspect_ratio="1:1"):
     contents = body_contents or []
-    bubble = {"type": "bubble"}
+    body = {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "sm",
+        "contents": [],
+    }
+    if title:
+        body["contents"].append(
+            {"type": "text", "text": title, "weight": "bold", "size": "lg", "wrap": True}
+        )
+    if subtitle:
+        body["contents"].append(
+            {"type": "text", "text": subtitle, "size": "sm", "color": "#555555", "wrap": True}
+        )
+    body["contents"].extend(contents)
+    if not body["contents"]:
+        body["contents"].append({"type": "text", "text": "เมนู", "wrap": True})
+
+    bubble = {"type": "bubble", "body": body}
     if image_url:
         bubble["hero"] = {
             "type": "image",
@@ -984,7 +1004,22 @@ def build_item_bubble(item, logger=None):
     title = item.item_name or item.name
     image_url = resolve_public_image_url(getattr(item, "custom_line_menu_image", None) or item.get("custom_line_menu_image"), logger)
 
-    bubble = {"type": "bubble"}
+    body = {
+        "type": "box",
+        "layout": "vertical",
+        "spacing": "sm",
+        "contents": [
+            {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True},
+        ],
+    }
+
+    description = (getattr(item, "description", None) or item.get("description") or "").strip()
+    if description:
+        body["contents"].append(
+            {"type": "text", "text": description, "size": "sm", "color": "#555555", "wrap": True}
+        )
+
+    bubble = {"type": "bubble", "body": body}
     if image_url:
         bubble["hero"] = {
             "type": "image",
