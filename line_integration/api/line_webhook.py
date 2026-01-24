@@ -969,10 +969,8 @@ def parse_orders_from_text(text, item_map):
 
             try:
                 qty_val = eval_qty_expression(clean_qty)
-            except Exception as e:
-                # If eval failed, maybe it wasn't a quantity line or just garbage
-                # Append debug info to the line text for the user to see (temp)
-                invalid_qty.append(f"{line} (ค่าที่รับได้: '{qty_part}' -> '{clean_qty}', Error: {str(e)})")
+            except Exception:
+                invalid_qty.append(f"{line} (ระบุจำนวนไม่ถูกต้อง)")
                 continue
 
             if qty_val < 0:
