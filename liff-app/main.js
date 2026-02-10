@@ -468,6 +468,8 @@ async function renderProfile() {
             return;
         }
         
+        let listHtml = '';
+        orders.forEach(order => {
             let itemsHtml = '';
             if (order.items && order.items.length > 0) {
                 itemsHtml = `<div class="history-items hidden" id="order-items-${order.name}">`;
