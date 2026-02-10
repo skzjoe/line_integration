@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Wellie LIFF</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anuphan:wght@100..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Loading Screen -->
+    <div id="loading" class="screen">
+      <div class="loader"></div>
+      <p>กำลังโหลด...</p>
+    </div>
+
+    <!-- Main Navigation / Header -->
+    <header id="main-header" class="hidden">
+      <div class="user-profile">
+        <img id="user-img" src="" alt="" />
+        <span id="user-name"></span>
+      </div>
+      <div class="points-badge">
+        <span id="user-points">0</span> แต้ม
+      </div>
+    </header>
+
+    <!-- Content Sections -->
+    <main id="content" class="hidden">
+      <!-- Pages will be injected here -->
+    </main>
+
+    <!-- Navigation Bar -->
+    <nav id="bottom-nav" class="hidden">
+      <button class="nav-item active" data-page="home">
+        <span class="icon">🏠</span>
+        <span class="label">หน้าหลัก</span>
+      </button>
+      <button class="nav-item" data-page="menu">
+        <span class="icon">📜</span>
+        <span class="label">เมนู</span>
+      </button>
+      <button class="nav-item" data-page="order">
+        <span class="icon">🛒</span>
+        <span class="label">ตะกร้า</span>
+      </button>
+      <button class="nav-item" data-page="profile">
+        <span class="icon">👤</span>
+        <span class="label">สมาชิก</span>
+      </button>
+    </nav>
+  </div>
+  <script type="module" src="/main.js"></script>
+</body>
+</html>

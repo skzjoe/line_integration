@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: liff-app
+    runtime: static
+    buildCommand: npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_LIFF_ID
+        sync: false
+      - key: VITE_ERPNEXT_URL
+        sync: false
