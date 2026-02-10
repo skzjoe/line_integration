@@ -419,7 +419,7 @@ async function submitOrder() {
   });
 }
 
-function renderProfile() {
+async function renderProfile() {
   if (!user.is_registered) {
     contentEl.innerHTML = `
       <h2>สมัครสมาชิก</h2>
@@ -432,7 +432,8 @@ function renderProfile() {
     `;
     document.getElementById('reg-btn').onclick = register;
   } else {
-    contentEl.innerHTML = `
+    // Basic Profile
+    let html = `
       <div class="profile-card">
         <img src="${user.picture_url}" class="profile-img-large" />
         <h2>${user.customer_name}</h2>
@@ -442,7 +443,57 @@ function renderProfile() {
           <div class="points-label">แต้มสะสมปัจจุบัน</div>
         </div>
       </div>
+      
+      <div class="order-history-section">
+          <h3 class="section-title">ประวัติการสั่งซื้อล่าสุด</h3>
+          <div id="history-loading" class="loader-container" style="height: 100px;">
+              <div class="loader" style="width: 30px; height: 30px; border-width: 3px;"></div>
+          </div>
+          <div id="history-list"></div>
+      </div>
     `;
+    contentEl.innerHTML = html;
+    
+    // Fetch History
+    try {
+        const response = await axios.post(`${API_BASE}.liff_get_history`, {
+             access_token: liff.getAccessToken()
+        });
+        const orders = response.data.message || [];
+        const historyList = document.getElementById('history-list');
+        document.getElementById('history-loading').style.display = 'none';
+        
+        if (orders.length === 0) {
+            historyList.innerHTML = '<p class="text-center text-muted">ยังไม่มีประวัติการสั่งซื้อ</p>';
+            return;
+        }
+        
+        let listHtml = '';
+        orders.forEach(order => {
+            const date = new Date(order.transaction_date).toLocaleDateString('th-TH', {
+                day: 'numeric', month: 'short', year: '2-digit'
+            });
+            const statusClass = order.status || 'Draft';
+            
+            listHtml += `
+                <div class="history-card status-${statusClass}">
+                    <div class="history-info">
+                        <h4>${order.name}</h4>
+                        <div class="history-date">${date}</div>
+                    </div>
+                    <div class="history-status">
+                        <span class="status-badge ${statusClass}">${order.status}</span>
+                        <div class="history-total">${order.formatted_total}</div>
+                    </div>
+                </div>
+            `;
+        });
+        historyList.innerHTML = listHtml;
+        
+    } catch (err) {
+        console.error("History Error", err);
+        document.getElementById('history-loading').innerHTML = '<p class="error">โหลดประวัติไม่สำเร็จ</p>';
+    }
   }
 }
 

@@ -10,7 +10,7 @@ import re
 
 import requests
 import frappe
-from frappe.utils import add_days, fmt_money, now_datetime, today
+from frappe.utils import add_days, fmt_money, now_datetime, today, flt
 
 from line_integration.utils.line_client import get_settings, ensure_profile
 from line_integration.api.line_webhook import (
@@ -459,3 +459,25 @@ def liff_get_points(access_token=None):
         "customer_name": customer_name,
         "loyalty_program": loyalty_program,
     }
+# ──────────────────────────────────────────────
+#  5. Order History endpoint
+# ──────────────────────────────────────────────
+@frappe.whitelist(allow_guest=True)
+def liff_get_history(access_token=None):
+    profile_doc, _ = _get_liff_user(access_token)
+    if not profile_doc.customer:
+        return []
+
+    orders = frappe.get_all(
+        "Sales Order",
+        filters={"customer": profile_doc.customer},
+        fields=["name", "status", "grand_total", "currency", "transaction_date"],
+        order_by="transaction_date desc",
+        limit=20
+    )
+    
+    for order in orders:
+        order["formatted_total"] = fmt_money(order["grand_total"], currency=order["currency"])
+        # Add basic status color mapping for frontend if needed, or handle in JS
+        
+    return orders
