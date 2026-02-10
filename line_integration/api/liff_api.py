@@ -216,87 +216,10 @@ def liff_get_menu(access_token=None):
 
 @frappe.whitelist(allow_guest=True)
 def liff_submit_order(access_token=None, items=None, note=None):
-    # Existing liff_submit_order code...
-    pass  # Placeholder to indicate I'm inserting BEFORE this or keeping it
-
-@frappe.whitelist(allow_guest=True)
-def liff_calculate_cart(access_token=None, items=None):
-    if not items:
-        return {"grand_total": 0, "formatted_total": fmt_money(0), "items": []}
-
-    if isinstance(items, str):
-        items = json.loads(items)
-
-    customer = None
-    try:
-        if access_token:
-            profile_doc, _ = _get_liff_user(access_token)
-            customer = profile_doc.customer
-    except:
-        pass
-
-    price_list = None
-    if not customer:
-        price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list")
-    
-    currency = frappe.db.get_default("Currency") or "THB"
-    company = frappe.db.get_default("Company")
-    
-    grand_total = 0.0
-    updated_items = []
-
-    for item in items:
-        qty = flt(item.get("qty") or 1)
-        item_code = item.get("item_code")
-        
-        args = {
-            "item_code": item_code,
-            "qty": qty,
-            "customer": customer,
-            "price_list": price_list,
-            "company": company,
-            "transaction_date": today(),
-            "currency": currency
-        }
-        
-        rate = 0
-        try:
-            details = get_item_details(args)
-            rate = details.get("price_list_rate") or details.get("rate") or 0
-        except:
-            rate = 0
-            
-        # Fallback 1: Item Price (Standard Selling)
-        if rate <= 0:
-            rate = frappe.db.get_value("Item Price", 
-                {"item_code": item_code, "price_list": "Standard Selling"}, 
-                "price_list_rate"
-            ) or 0
-
-        # Fallback 2: Item Standard Rate
-        if rate <= 0:
-            doc = frappe.get_cached_doc("Item", item_code)
-            rate = flt(doc.standard_rate)
-
-        line_total = rate * qty
-        grand_total += line_total
-        
-        updated_item = item.copy()
-        updated_item.update({
-            "price": rate,
-            "formatted_price": fmt_money(rate, currency=currency),
-            "line_total": line_total,
-            "formatted_line_total": fmt_money(line_total, currency=currency)
-        })
-        updated_items.append(updated_item)
-
-    return {
-        "items": updated_items,
-        "grand_total": grand_total,
-        "formatted_total": fmt_money(grand_total, currency=currency)
-    }
-
     # CORS handled by site_config
+    if not access_token:
+        frappe.throw("Access Token is required")
+    
     profile_doc, user_info = _get_liff_user(access_token)
     settings = get_settings()
 
@@ -390,6 +313,83 @@ def liff_calculate_cart(access_token=None, items=None):
     except Exception:
         frappe.log_error(frappe.get_traceback(), "LIFF Order Error")
         frappe.throw("ไม่สามารถสร้างออเดอร์ได้ กรุณาลองใหม่อีกครั้ง")
+
+@frappe.whitelist(allow_guest=True)
+def liff_calculate_cart(access_token=None, items=None):
+    if not items:
+        return {"grand_total": 0, "formatted_total": fmt_money(0), "items": []}
+
+    if isinstance(items, str):
+        items = json.loads(items)
+
+    customer = None
+    try:
+        if access_token:
+            profile_doc, _ = _get_liff_user(access_token)
+            customer = profile_doc.customer
+    except:
+        pass
+
+    price_list = None
+    if not customer:
+        price_list = frappe.db.get_single_value("Selling Settings", "selling_price_list")
+    
+    currency = frappe.db.get_default("Currency") or "THB"
+    company = frappe.db.get_default("Company")
+    
+    grand_total = 0.0
+    updated_items = []
+
+    for item in items:
+        qty = flt(item.get("qty") or 1)
+        item_code = item.get("item_code")
+        
+        args = {
+            "item_code": item_code,
+            "qty": qty,
+            "customer": customer,
+            "price_list": price_list,
+            "company": company,
+            "transaction_date": today(),
+            "currency": currency
+        }
+        
+        rate = 0
+        try:
+            details = get_item_details(args)
+            rate = details.get("price_list_rate") or details.get("rate") or 0
+        except:
+            rate = 0
+            
+        # Fallback 1: Item Price (Standard Selling)
+        if rate <= 0:
+            rate = frappe.db.get_value("Item Price", 
+                {"item_code": item_code, "price_list": "Standard Selling"}, 
+                "price_list_rate"
+            ) or 0
+
+        # Fallback 2: Item Standard Rate
+        if rate <= 0:
+            doc = frappe.get_cached_doc("Item", item_code)
+            rate = flt(doc.standard_rate)
+
+        line_total = rate * qty
+        grand_total += line_total
+        
+        updated_item = item.copy()
+        updated_item.update({
+            "price": rate,
+            "formatted_price": fmt_money(rate, currency=currency),
+            "line_total": line_total,
+            "formatted_line_total": fmt_money(line_total, currency=currency)
+        })
+        updated_items.append(updated_item)
+
+    return {
+        "items": updated_items,
+        "grand_total": grand_total,
+        "formatted_total": fmt_money(grand_total, currency=currency)
+    }
 
 
 # ──────────────────────────────────────────────

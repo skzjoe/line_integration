@@ -413,12 +413,15 @@ async function submitOrder() {
 
   showConfirm('ยืนยันออเดอร์', 'คุณต้องการยืนยันการสั่งซื้อหรือไม่?', async () => {
     const note = document.getElementById('note').value;
+    const btn = document.getElementById('submit-order-btn');
+    const originalText = btn ? btn.textContent : '';
+    
     try {
       // Show loading state
-      const btn = document.getElementById('submit-order-btn');
-      const originalText = btn.textContent;
-      btn.textContent = 'กำลังทำรายการ...';
-      btn.disabled = true;
+      if (btn) {
+        btn.textContent = 'กำลังทำรายการ...';
+        btn.disabled = true;
+      }
 
       const response = await axios.post(`${API_BASE}.liff_submit_order`, {
         access_token: liff.getAccessToken(),
@@ -433,7 +436,6 @@ async function submitOrder() {
     } catch (err) {
       showModal('ผิดพลาด', 'สั่งออเดอร์ล้มเหลว: ' + (err.response?.data?.message || err.message));
       // Reset button
-      const btn = document.getElementById('submit-order-btn');
       if(btn) {
           btn.textContent = originalText;
           btn.disabled = false;
