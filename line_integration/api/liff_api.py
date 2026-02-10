@@ -261,10 +261,7 @@ def liff_submit_order(access_token=None, items=None, note=None):
         so.insert(ignore_permissions=True)
         so.submit()
 
-            "grand_total": so.grand_total,
-            "grand_total_formatted": total_text,
-            "currency": so.currency,
-        }
+        total_text = fmt_money(so.grand_total, currency=so.currency)
         
         # Send confirmation via LINE
         try:
