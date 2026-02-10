@@ -277,9 +277,6 @@ window.addToCart = (itemCode) => {
   
   // Optional: Reset menu qty to 1
   if (qtyEl) qtyEl.textContent = '1';
-  
-  // Removed alert popup as requested
-  // liff.sendMessages(...) // also removed to be completely silent/non-intrusive on UI
 };
 
 function updateFloatingCart() {
@@ -309,6 +306,21 @@ function updateFloatingCart() {
         </div>
     `;
     floatBtn.classList.remove('hidden');
+}
+
+async function calculateCartBackend() {
+    if (cart.length === 0) return null;
+    
+    try {
+        const response = await axios.post(`${API_BASE}.liff_calculate_cart`, {
+            access_token: liff.getAccessToken(),
+            items: cart
+        });
+        return response.data.message;
+    } catch (err) {
+        console.error('Calculation failed:', err);
+        return null;
+    }
 }
 
 async function renderOrder() {
