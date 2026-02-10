@@ -257,7 +257,7 @@ window.adjustMenuQty = (itemCode, delta) => {
     }
 };
 
-window.addToCart = (itemCode) => {
+window.addToCart = async (itemCode) => {
   const item = menuItems.find(i => i.item_code === itemCode);
   if (!item) return;
   
@@ -271,26 +271,25 @@ window.addToCart = (itemCode) => {
     cart.push({ ...item, qty: qty });
   }
   
-  // Update badge immediately
+  // Update badge immediately (internal count is fine)
   updateCartBadge();
-  updateFloatingCart();
+  
+  // Update floating cart with backend price
+  await updateFloatingCart();
   
   // Optional: Reset menu qty to 1
   if (qtyEl) qtyEl.textContent = '1';
 };
 
-function updateFloatingCart() {
+async function updateFloatingCart() {
     let floatBtn = document.getElementById('floating-cart-btn');
     const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
-    const grandTotal = cart.reduce((sum, item) => sum + ((item.price || 0) * item.qty), 0);
     
     if (totalQty === 0) {
         if (floatBtn) floatBtn.classList.add('hidden');
         return;
     }
-    
-    const formattedTotal = grandTotal.toLocaleString('th-TH', { style: 'currency', currency: 'THB' });
-    
+
     if (!floatBtn) {
         floatBtn = document.createElement('div');
         floatBtn.id = 'floating-cart-btn';
@@ -299,13 +298,28 @@ function updateFloatingCart() {
         document.body.appendChild(floatBtn);
     }
     
+    // Show current local total first or "..."
+    const localTotal = cart.reduce((sum, item) => sum + ((item.price || 0) * item.qty), 0);
+    const formattedLocal = localTotal.toLocaleString('th-TH', { style: 'currency', currency: 'THB' });
+    
     floatBtn.innerHTML = `
         <div class="float-content">
             <div class="float-qty">${totalQty} รายการ</div>
-            <div class="float-total">ไปตะกร้า ${formattedTotal} ></div>
+            <div class="float-total">ไปตะกร้า ${formattedLocal} ></div>
         </div>
     `;
     floatBtn.classList.remove('hidden');
+
+    // Sync with backend for accurate Pricing Rules
+    const serverCart = await calculateCartBackend();
+    if (serverCart && serverCart.formatted_total) {
+        floatBtn.innerHTML = `
+            <div class="float-content">
+                <div class="float-qty">${totalQty} รายการ</div>
+                <div class="float-total">ไปตะกร้า ${serverCart.formatted_total} ></div>
+            </div>
+        `;
+    }
 }
 
 async function calculateCartBackend() {
