@@ -103,14 +103,22 @@ def _get_liff_user(access_token):
 # ──────────────────────────────────────────────
 
 @frappe.whitelist(allow_guest=True)
+def liff_options(*args, **kwargs):
+    """Specific hook for OPTIONS preflight checks."""
+    set_cors_headers()
+    return {}
+
+@frappe.whitelist(allow_guest=True)
 def liff_auth(access_token=None):
     set_cors_headers()
     if frappe.request.method == "OPTIONS":
-        return
+        return {}
 
     try:
+        # If token is missing, return success=False but 200 OK to avoid 417
         if not access_token:
-            return {"success": False, "error": "Missing access_token"}
+            frappe.local.response['http_status_code'] = 200
+            return {"success": False, "error": "No access_token provided"}
 
         profile_doc, user_info = _get_liff_user(access_token)
         customer_data = {}
