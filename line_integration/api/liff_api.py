@@ -166,8 +166,6 @@ def liff_get_menu(access_token=None):
             item.get("custom_line_menu_image")
         )
         
-        # Calculate price
-        rate = 0
         formatted_price = ""
         try:
             args = {
@@ -180,10 +178,15 @@ def liff_get_menu(access_token=None):
             }
             details = get_item_details(args)
             rate = details.get("price_list_rate") or details.get("rate") or 0
-            if rate > 0:
-                formatted_price = fmt_money(rate, currency=details.get("currency"))
         except:
-            pass
+            rate = 0
+
+        # Fallback to standard_rate if price is still 0
+        if rate <= 0:
+            rate = flt(item.standard_rate)
+
+        if rate > 0:
+            formatted_price = fmt_money(rate, currency=frappe.db.get_default("Currency") or "THB")
 
         result.append({
             "item_code": item.name,

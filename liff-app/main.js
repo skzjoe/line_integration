@@ -69,8 +69,6 @@ async function init() {
     
   } catch (err) {
     console.error('LIFF Init Error:', err);
-  } catch (err) {
-    console.error('LIFF Init Error:', err);
     showModal('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลด LIFF: ' + err.message);
   }
 }
