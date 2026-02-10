@@ -44,7 +44,7 @@ const userPointsEl = document.getElementById('user-points');
  */
 async function init() {
   try {
-    console.log('Initializing LIFF...');
+    // console.log('Initializing LIFF...');
     await liff.init({ liffId: LIFF_ID });
     
     if (!liff.isLoggedIn()) {
@@ -56,9 +56,7 @@ async function init() {
     
     // Debug Ping
     try {
-        console.log('Pinging backend...');
-        await axios.get(`${API_BASE}.liff_debug`);
-        console.log('Backend connected!');
+        await axios.get(`${API_BASE}.ping`);
     } catch (e) {
         console.warn('Backend debug ping failed:', e);
     }
@@ -89,7 +87,7 @@ async function authenticate(token) {
     const res = response.data.message;
     if (res && res.success) {
       user = res;
-      console.log('Authenticated User:', user);
+      // console.log('Authenticated User:', user);
       updateUIProfile();
       fetchPoints(); 
     } else {
