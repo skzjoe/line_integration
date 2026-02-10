@@ -49,21 +49,31 @@ async function init() {
  * Authenticate with Frappe Backend
  */
 async function authenticate(token) {
+  if (!token) {
+    console.warn('No access token available for auth');
+    return;
+  }
   try {
     const response = await axios.post(`${API_BASE}.liff_auth`, {
       access_token: token
     });
     
-    user = response.data.message;
-    console.log('Authenticated User:', user);
-    
-    updateUIProfile();
-    fetchPoints(); // silent fetch points
+    const res = response.data.message;
+    if (res && res.success) {
+      user = res;
+      console.log('Authenticated User:', user);
+      updateUIProfile();
+      fetchPoints(); 
+    } else {
+      console.error('Auth API Error:', res?.error);
+      alert('ไม่สามารถยืนยันตัวตนได้: ' + (res?.error || 'Unknown error'));
+      loadingEl.classList.add('hidden'); // Hide loading even on error
+    }
     
   } catch (err) {
-    console.error('Auth Error:', err);
-    // If auth fails, user might not be registered or API issue
-    // We still show Home but with restricted actions
+    console.error('Auth Network/CORS Error:', err);
+    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ' + err.message);
+    loadingEl.classList.add('hidden');
   }
 }
 

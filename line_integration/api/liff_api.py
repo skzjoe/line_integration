@@ -30,12 +30,18 @@ from line_integration.api.line_webhook import (
 def set_cors_headers():
     """Manual CORS handling for Frappe Cloud environments."""
     origin = frappe.get_request_header("Origin")
-    if origin:
+    if not origin:
+        return
+
+    # Use a specific whitelist or just match the origin if it looks valid
+    # For now, we trust the origin if it matches our Render app pattern
+    if "onrender.com" in origin or origin == frappe.utils.get_url():
         frappe.response["headers"] = {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Frappe-CSRF-Token",
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin"
         }
 
 # ──────────────────────────────────────────────
@@ -105,26 +111,34 @@ def liff_auth(access_token=None):
     set_cors_headers()
     if frappe.request.method == "OPTIONS":
         return
-    profile_doc, user_info = _get_liff_user(access_token)
 
-    customer_data = {}
-    if profile_doc.customer:
-        customer_data = frappe.db.get_value(
-            "Customer",
-            profile_doc.customer,
-            ["customer_name", "mobile_no"],
-            as_dict=True,
-        ) or {}
+    try:
+        profile_doc, user_info = _get_liff_user(access_token)
+        customer_data = {}
+        if profile_doc.customer:
+            customer_data = frappe.db.get_value(
+                "Customer",
+                profile_doc.customer,
+                ["customer_name", "mobile_no"],
+                as_dict=True,
+            ) or {}
 
-    return {
-        "user_id": user_info.get("user_id"),
-        "display_name": user_info.get("display_name"),
-        "picture_url": user_info.get("picture_url"),
-        "is_registered": bool(profile_doc.customer),
-        "customer_name": customer_data.get("customer_name"),
-        "customer_id": profile_doc.customer,
-        "phone": customer_data.get("mobile_no"),
-    }
+        return {
+            "success": True,
+            "user_id": user_info.get("user_id"),
+            "display_name": user_info.get("display_name"),
+            "picture_url": user_info.get("picture_url"),
+            "is_registered": bool(profile_doc.customer),
+            "customer_name": customer_data.get("customer_name"),
+            "customer_id": profile_doc.customer,
+            "phone": customer_data.get("mobile_no"),
+        }
+    except Exception as e:
+        frappe.log_error(frappe.get_traceback(), "LIFF Auth Error")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 # ──────────────────────────────────────────────
