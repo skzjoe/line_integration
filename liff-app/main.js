@@ -334,7 +334,6 @@ function renderOrder() {
     const priceText = item.formatted_price ? `${item.formatted_price}/ชิ้น` : '';
     
     html += `
-    html += `
       <div class="cart-item">
         <div class="cart-item-info">
           <div class="name">${item.item_name}</div>
