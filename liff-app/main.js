@@ -7,8 +7,8 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID || 'PENDING';
 const ERPNEXT_URL = (import.meta.env.VITE_ERPNEXT_URL || window.location.origin.replace('liff.', '')).replace(/\/$/, ""); 
 const API_BASE = `${ERPNEXT_URL}/api/method/line_integration.line_integration.api.liff_api`;
 
-const API_KEY = import.meta.env.VITE_API_KEY || '1748a77229b8555';
-const API_SECRET = import.meta.env.VITE_API_SECRET || '903cba2e46684e9';
+const API_KEY = import.meta.env.VITE_API_KEY || '';
+const API_SECRET = import.meta.env.VITE_API_SECRET || '';
 
 // Axios Config
 axios.defaults.headers.common['Content-Type'] = 'application/json';
