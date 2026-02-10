@@ -468,6 +468,16 @@ async function renderProfile() {
             return;
         }
         
+        const statusMap = {
+            'Draft': 'รอชำระ',
+            'To Deliver and Bill': 'รอจัดส่ง',
+            'To Bill': 'รอวางบิล',
+            'To Deliver': 'รอจัดส่ง',
+            'Completed': 'สำเร็จ',
+            'Cancelled': 'ยกเลิก',
+            'Overdue': 'เกินกำหนด'
+        };
+
         let listHtml = '';
         orders.forEach(order => {
             let itemsHtml = '';
@@ -484,6 +494,9 @@ async function renderProfile() {
                 itemsHtml += '</div>';
             }
 
+            const statusClass = order.status || 'Draft';
+            const statusLabel = statusMap[order.status] || order.status;
+
             listHtml += `
                 <div class="history-card status-${statusClass}" onclick="toggleOrderDetails('${order.name}')">
                     <div class="history-card-header">
@@ -492,7 +505,7 @@ async function renderProfile() {
                             <div class="history-date">${date}</div>
                         </div>
                         <div class="history-status">
-                            <span class="status-badge ${statusClass}">${order.status}</span>
+                            <span class="status-badge ${statusClass}">${statusLabel}</span>
                             <div class="history-total">${order.formatted_total}</div>
                         </div>
                     </div>
