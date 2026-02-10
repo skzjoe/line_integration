@@ -28,6 +28,10 @@ from erpnext.stock.get_item_details import get_item_details
 #  CORS helper
 # ──────────────────────────────────────────────
 
+@frappe.whitelist(allow_guest=True)
+def ping():
+    return "pong"
+
 
 # ──────────────────────────────────────────────
 #  Auth helpers

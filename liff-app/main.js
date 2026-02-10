@@ -545,7 +545,7 @@ async function renderProfile() {
   }
 }
 
-function toggleOrderDetails(orderId) {
+window.toggleOrderDetails = (orderId) => {
     const el = document.getElementById(`order-items-${orderId}`);
     if (el) {
         el.classList.toggle('hidden');
