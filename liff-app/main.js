@@ -69,7 +69,9 @@ async function init() {
     
   } catch (err) {
     console.error('LIFF Init Error:', err);
-    alert('เกิดข้อผิดพลาดในการโหลด LIFF: ' + err.message);
+  } catch (err) {
+    console.error('LIFF Init Error:', err);
+    showModal('ข้อผิดพลาด', 'เกิดข้อผิดพลาดในการโหลด LIFF: ' + err.message);
   }
 }
 
@@ -94,13 +96,13 @@ async function authenticate(token) {
       fetchPoints(); 
     } else {
       console.error('Auth API Error:', res?.error);
-      alert('ไม่สามารถยืนยันตัวตนได้: ' + (res?.error || 'Unknown error'));
-      loadingEl.classList.add('hidden'); // Hide loading even on error
+      // alert('ไม่สามารถยืนยันตัวตนได้: ' + (res?.error || 'Unknown error')); // Silent fail or show modal if critical
+      loadingEl.classList.add('hidden'); 
     }
     
   } catch (err) {
     console.error('Auth Network/CORS Error:', err);
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์: ' + err.message);
+    // showModal('Connection Error', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์'); // Optional
     loadingEl.classList.add('hidden');
   }
 }
@@ -382,27 +384,41 @@ window.removeFromCart = (index) => {
 
 async function submitOrder() {
   if (!user || !user.is_registered) {
-    alert('กรุณาสมัครสมาชิกก่อนสั่งออเดอร์');
-    document.querySelector('[data-page=profile]').click();
+    showModal('แจ้งเตือน', 'กรุณาสมัครสมาชิกก่อนสั่งออเดอร์', () => {
+        document.querySelector('[data-page=profile]').click();
+    });
     return;
   }
 
-  if (confirm('ยืนยันการสั่งออเดอร์?')) {
+  showConfirm('ยืนยันออเดอร์', 'คุณต้องการยืนยันการสั่งซื้อหรือไม่?', async () => {
     const note = document.getElementById('note').value;
     try {
+      // Show loading state
+      const btn = document.getElementById('submit-order-btn');
+      const originalText = btn.textContent;
+      btn.textContent = 'กำลังทำรายการ...';
+      btn.disabled = true;
+
       const response = await axios.post(`${API_BASE}.liff_submit_order`, {
         access_token: liff.getAccessToken(),
         items: cart,
         note: note
       });
       
-      alert(`สั่งออเดอร์เรียบร้อย! เลขที่ใบสั่งซื้อ: ${response.data.message.sales_order}`);
+      showModal('สำเร็จ', `สั่งออเดอร์เรียบร้อย! เลขที่: ${response.data.message.sales_order}`);
       cart = [];
       showPage('home');
+      updateCartBadge();
     } catch (err) {
-      alert('สั่งออเดอร์ล้มเหลว: ' + (err.response?.data?.message || err.message));
+      showModal('ผิดพลาด', 'สั่งออเดอร์ล้มเหลว: ' + (err.response?.data?.message || err.message));
+      // Reset button
+      const btn = document.getElementById('submit-order-btn');
+      if(btn) {
+          btn.textContent = originalText;
+          btn.disabled = false;
+      }
     }
-  }
+  });
 }
 
 function renderProfile() {
@@ -435,7 +451,7 @@ function renderProfile() {
 async function register() {
   const phone = document.getElementById('reg-phone').value;
   if (!/^\d{10}$/.test(phone)) {
-    alert('กรุณาระบุหมายเลขโทรศัพท์ 10 หลักให้ถูกต้อง');
+    showModal('แจ้งเตือน', 'กรุณาระบุหมายเลขโทรศัพท์ 10 หลักให้ถูกต้อง');
     return;
   }
 
@@ -445,13 +461,79 @@ async function register() {
       phone: phone
     });
     
-    alert('ลงทะเบียนเรียบร้อยแล้ว!');
+    showModal('สำเร็จ', 'ลงทะเบียนเรียบร้อยแล้ว!');
     await authenticate(liff.getAccessToken()); // re-auth to get customer info
     renderProfile();
   } catch (err) {
-    alert('ลงทะเบียนล้มเหลว: ' + (err.response?.data?.message || err.message));
+    showModal('ผิดพลาด', 'ลงทะเบียนล้มเหลว: ' + (err.response?.data?.message || err.message));
   }
 }
 
+// Modal Helpers
+function setupModals() {
+    const modalHtml = `
+        <div id="custom-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="modal-title" id="modal-title"></div>
+                <div class="modal-body" id="modal-body"></div>
+                <div class="modal-actions" id="modal-actions"></div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+function showModal(title, message, onConfirm = null) {
+    const modal = document.getElementById('custom-modal');
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').textContent = message;
+    
+    const actions = document.getElementById('modal-actions');
+    actions.innerHTML = '';
+    
+    const btn = document.createElement('button');
+    btn.className = 'modal-btn primary';
+    btn.textContent = 'ตกลง';
+    btn.onclick = () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+    };
+    actions.appendChild(btn);
+    
+    modal.classList.add('active');
+}
+
+function showConfirm(title, message, onConfirm) {
+    const modal = document.getElementById('custom-modal');
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-body').textContent = message;
+    
+    const actions = document.getElementById('modal-actions');
+    actions.innerHTML = '';
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'modal-btn secondary';
+    cancelBtn.textContent = 'ยกเลิก';
+    cancelBtn.onclick = closeModal;
+    
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'modal-btn primary';
+    confirmBtn.textContent = 'ยืนยัน';
+    confirmBtn.onclick = () => {
+        closeModal();
+        if (onConfirm) onConfirm();
+    };
+    
+    actions.appendChild(cancelBtn);
+    actions.appendChild(confirmBtn);
+    
+    modal.classList.add('active');
+}
+
+function closeModal() {
+    document.getElementById('custom-modal').classList.remove('active');
+}
+
 // Start app
+setupModals();
 init();
