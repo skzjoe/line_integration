@@ -469,9 +469,8 @@ async function renderProfile() {
         }
         
         const statusMap = {
-            'Draft': 'รอชำระ',
             'To Deliver and Bill': 'รอจัดส่ง',
-            'To Bill': 'รอวางบิล',
+            'To Bill': 'รอชำระ',
             'To Deliver': 'รอจัดส่ง',
             'Completed': 'สำเร็จ',
             'Cancelled': 'ยกเลิก',

@@ -477,7 +477,10 @@ def liff_get_history(access_token=None):
 
     orders = frappe.get_all(
         "Sales Order",
-        filters={"customer": profile_doc.customer},
+        filters={
+            "customer": profile_doc.customer,
+            "status": ["!=", "Draft"]
+        },
         fields=["name", "status", "grand_total", "currency", "transaction_date"],
         order_by="transaction_date desc",
         limit=10,
