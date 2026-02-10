@@ -27,34 +27,6 @@ from line_integration.api.line_webhook import (
 #  CORS helper
 # ──────────────────────────────────────────────
 
-def set_cors_headers():
-    """Manual CORS handling for Frappe Cloud environments."""
-    try:
-        origin = frappe.get_request_header("Origin")
-        if not origin:
-            return
-
-        # Try robust set_custom_header (Frappe v14+)
-        if hasattr(frappe, "set_custom_header"):
-            frappe.set_custom_header("Access-Control-Allow-Origin", origin)
-            frappe.set_custom_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            frappe.set_custom_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Frappe-CSRF-Token, Cache-Control, Pragma, Origin, Accept")
-            frappe.set_custom_header("Access-Control-Allow-Credentials", "true")
-            frappe.set_custom_header("Vary", "Origin")
-        else:
-            # Fallback for older Frappe versions
-            if not frappe.response.get("headers"):
-                frappe.response["headers"] = {}
-            frappe.response["headers"].update({
-                "Access-Control-Allow-Origin": origin,
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Frappe-CSRF-Token, Cache-Control, Pragma, Origin, Accept",
-                "Access-Control-Allow-Credentials": "true",
-                "Vary": "Origin"
-            })
-    except Exception:
-        # Prevent 500 if CORS setting fails
-        pass
 
 # ──────────────────────────────────────────────
 #  Auth helpers
@@ -121,14 +93,11 @@ def _get_liff_user(access_token):
 @frappe.whitelist(allow_guest=True)
 def liff_debug():
     """Simple ping to check if code is updated."""
-    set_cors_headers()
-    return {"status": "ok", "version": "2026-02-10-v2"}
+    return {"status": "ok", "version": "2026-02-10-v3-no-cors"}
 
 @frappe.whitelist(allow_guest=True)
 def liff_auth(access_token=None):
-    set_cors_headers()
-    if frappe.request.method == "OPTIONS":
-        return {}
+    # CORS handled by site_config
 
     try:
         # If token is missing, return success=False but 200 OK to avoid 417
@@ -172,9 +141,7 @@ def liff_auth(access_token=None):
 
 @frappe.whitelist(allow_guest=True)
 def liff_get_menu():
-    set_cors_headers()
-    if frappe.request.method == "OPTIONS":
-        return
+    # CORS handled by site_config
     items = fetch_menu_items(limit=50)
     result = []
     for item in items:
@@ -196,9 +163,7 @@ def liff_get_menu():
 
 @frappe.whitelist(allow_guest=True)
 def liff_submit_order(access_token=None, items=None, note=None):
-    set_cors_headers()
-    if frappe.request.method == "OPTIONS":
-        return
+    # CORS handled by site_config
     profile_doc, user_info = _get_liff_user(access_token)
     settings = get_settings()
 
@@ -278,9 +243,7 @@ def liff_submit_order(access_token=None, items=None, note=None):
 
 @frappe.whitelist(allow_guest=True)
 def liff_register(access_token=None, phone=None):
-    set_cors_headers()
-    if frappe.request.method == "OPTIONS":
-        return
+    # CORS handled by site_config
     profile_doc, user_info = _get_liff_user(access_token)
 
     phone = (phone or "").strip()
@@ -394,9 +357,7 @@ def liff_register(access_token=None, phone=None):
 
 @frappe.whitelist(allow_guest=True)
 def liff_get_points(access_token=None):
-    set_cors_headers()
-    if frappe.request.method == "OPTIONS":
-        return
+    # CORS handled by site_config
     profile_doc, user_info = _get_liff_user(access_token)
 
     if not profile_doc.customer:
