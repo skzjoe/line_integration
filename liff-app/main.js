@@ -7,13 +7,20 @@ const LIFF_ID = import.meta.env.VITE_LIFF_ID || 'PENDING';
 const ERPNEXT_URL = (import.meta.env.VITE_ERPNEXT_URL || window.location.origin.replace('liff.', '')).replace(/\/$/, ""); 
 const API_BASE = `${ERPNEXT_URL}/api/method/line_integration.line_integration.api.liff_api`;
 
+const API_KEY = import.meta.env.VITE_API_KEY || '1748a77229b8555';
+const API_SECRET = import.meta.env.VITE_API_SECRET || '903cba2e46684e9';
+
 // Axios Config
 axios.defaults.headers.common['Content-Type'] = 'application/json';
 axios.defaults.headers.common['Accept'] = 'application/json';
-// Prevent 417 Expectation Failed
+
+// Prevent 417 Expectation Failed & Add Auth Headers
 axios.interceptors.request.use(config => {
   if (config.headers) {
     delete config.headers['Expect'];
+    if (API_KEY && API_SECRET) {
+        config.headers['Authorization'] = `token ${API_KEY}:${API_SECRET}`;
+    }
   }
   return config;
 });
