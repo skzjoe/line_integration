@@ -361,9 +361,15 @@ def liff_calculate_cart(access_token=None, items=None):
     updated_items = []
     for i, so_item in enumerate(so.items):
         original = items[i] if i < len(items) else {}
+        
+        # Fetch image URL like in liff_get_menu
+        image_url = frappe.db.get_value("Item", so_item.item_code, "custom_line_menu_image")
+        image_url = resolve_public_image_url(image_url)
+
         updated_items.append({
             "item_code": so_item.item_code,
             "item_name": so_item.item_name or original.get("item_name"),
+            "image_url": image_url,
             "qty": so_item.qty,
             "price": so_item.rate,
             "formatted_price": fmt_money(so_item.rate, currency=currency),

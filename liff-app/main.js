@@ -368,22 +368,26 @@ async function renderOrder() {
   let html = '<h2>ตะกร้าสินค้า</h2><div class="cart-items">';
   
   itemsToRender.forEach((item, index) => {
-    // If it's the server cart, the index might not match exactly if we relied on index before.
-    // But since we pass the whole cart, it should be 1:1.
     const priceText = item.formatted_price ? `${item.formatted_price}/ชิ้น` : '';
+    const imageUrl = item.image_url || 'https://via.placeholder.com/80';
     
     html += `
       <div class="cart-item">
+        <img src="${imageUrl}" class="cart-item-image" onerror="this.src='https://via.placeholder.com/80'" />
         <div class="cart-item-info">
           <div class="name">${item.item_name}</div>
           <div class="price-detail">${priceText}</div>
         </div>
-        <div class="qty-selector">
-            <button class="qty-btn" onclick="adjustCartQty(${index}, -1)">-</button>
-            <span class="qty-display">${item.qty}</span>
-            <button class="qty-btn" onclick="adjustCartQty(${index}, 1)">+</button>
+        <div class="cart-item-actions">
+          <div class="qty-selector">
+              <button class="qty-btn" onclick="adjustCartQty(${index}, -1)">-</button>
+              <span class="qty-display">${item.qty}</span>
+              <button class="qty-btn" onclick="adjustCartQty(${index}, 1)">+</button>
+          </div>
+          <button class="remove-btn" onclick="removeFromCart(${index})">
+              <span>✕</span>
+          </button>
         </div>
-        <button class="remove-btn" onclick="removeFromCart(${index})" style="margin-left: 10px;">x</button>
       </div>
     `;
   });
