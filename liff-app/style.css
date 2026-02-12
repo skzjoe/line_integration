@@ -172,7 +172,7 @@ header {
 main {
     flex: 1;
     padding: 20px;
-    padding-bottom: calc(var(--nav-height) + 40px);
+    padding-bottom: calc(var(--nav-height) + 100px);
 }
 
 /* Menu Grid */
