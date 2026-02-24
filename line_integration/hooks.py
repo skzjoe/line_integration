@@ -50,7 +50,7 @@ fixtures = [
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/line_integration/css/line_integration.css"
+app_include_css = "/assets/line_integration/css/line_integration.css"
 # app_include_js = "/assets/line_integration/js/line_integration.js"
 
 # include js, css files in header of web template
